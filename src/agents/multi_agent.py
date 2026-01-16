@@ -117,7 +117,16 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
     Returns:
         Agent 的回复
     """
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+    import os
+    
+    # 获取 Agent 专用的 API Key，如果没有则使用默认的
+    api_key = None
+    if agent.api_key_env:
+        api_key = os.getenv(agent.api_key_env)
+    if not api_key:
+        api_key = os.getenv("OPENAI_API_KEY")
+    
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, api_key=api_key)
     
     # 构建 System Prompt
     user_context = get_dynamic_user_context()

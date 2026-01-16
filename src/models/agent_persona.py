@@ -26,6 +26,7 @@ class AgentPersona(BaseModel):
         trigger_keywords: 触发关键词（用户消息包含这些词时可能触发）
         trigger_probability: 概率触发（即使没关键词也可能随机加入）
         is_default: 是否是默认 Agent（用户直接聊天时使用）
+        api_key_env: 专用 API Key 的环境变量名（可选）
     """
     id: str
     name: str
@@ -34,6 +35,7 @@ class AgentPersona(BaseModel):
     trigger_keywords: list[str] = Field(default_factory=list)
     trigger_probability: float = 0.0  # 0-1，随机触发概率
     is_default: bool = False
+    api_key_env: Optional[str] = None  # 如 "AGENT_XUEBA_API_KEY"
 
 
 # ==================== 预设 Agent ====================
@@ -62,7 +64,8 @@ PRESET_AGENTS = [
 职责：解答学习问题、提供学习建议、复习规划。
 """.strip(),
         trigger_keywords=["学习", "复习", "考试", "作业", "习题", "算法", "代码", "编程"],
-        trigger_probability=0.1
+        trigger_probability=0.1,
+        api_key_env="AGENT_XUEBA_API_KEY"  # 可单独配置 API Key
     ),
     AgentPersona(
         id="tiyu",
@@ -75,7 +78,8 @@ PRESET_AGENTS = [
 职责：运动建议、健康提醒、鼓励锻炼。
 """.strip(),
         trigger_keywords=["运动", "健身", "跑步", "锻炼", "减肥", "健康", "久坐"],
-        trigger_probability=0.05
+        trigger_probability=0.05,
+        api_key_env="AGENT_TIYU_API_KEY"  # 可单独配置 API Key
     ),
 ]
 
