@@ -68,3 +68,56 @@ async def get_history(thread_id: str):
         return HistoryResponse(messages=history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 多 Agent 支持 ====================
+
+from src.agents.multi_agent import multi_agent_chat
+from src.models.agent_persona import get_all_agents
+
+
+class MultiChatResponse(BaseModel):
+    """多 Agent 回复模型。"""
+    responses: list[dict]  # [{agent_id, agent_name, emoji, response}, ...]
+    extracted_count: int = 0
+
+
+class AgentInfo(BaseModel):
+    """Agent 信息。"""
+    id: str
+    name: str
+    emoji: str
+
+
+@router.post("/multi", response_model=MultiChatResponse)
+async def send_multi_agent(request: ChatRequest):
+    """发送消息并获取多 Agent 回复。"""
+    try:
+        # 调用多 Agent 系统
+        responses = multi_agent_chat(request.message)
+        
+        # 提取生活信息（使用第一个 Agent 的回复）
+        extracted_count = 0
+        if responses:
+            try:
+                extracted_count = process_conversation(
+                    request.message, 
+                    responses[0]["response"]
+                )
+            except Exception:
+                pass
+        
+        return MultiChatResponse(responses=responses, extracted_count=extracted_count)
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/agents", response_model=list[AgentInfo])
+async def list_agents():
+    """获取所有可用的 Agent。"""
+    agents = get_all_agents()
+    return [
+        AgentInfo(id=a.id, name=a.name, emoji=a.emoji)
+        for a in agents
+    ]

@@ -60,6 +60,15 @@ function escapeHtml(text) {
 
 // ==================== API 调用 ====================
 
+function addAgentMessage(emoji, name, content) {
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+    div.innerHTML = `<div class="sender">${emoji} ${name}:</div>${escapeHtml(content)}`;
+    messagesEl.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
 async function sendMessage(message) {
     // 显示用户消息
     addMessage(message, 'user');
@@ -70,7 +79,8 @@ async function sendMessage(message) {
     setStatus('thinking');
 
     try {
-        const response = await fetch(`${API_BASE}/api/chat/send`, {
+        // 使用多 Agent API
+        const response = await fetch(`${API_BASE}/api/chat/multi`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message, thread_id: threadId })
@@ -83,7 +93,11 @@ async function sendMessage(message) {
         }
 
         const data = await response.json();
-        addMessage(data.response, 'assistant');
+
+        // 显示所有 Agent 的回复
+        for (const r of data.responses) {
+            addAgentMessage(r.emoji, r.agent_name, r.response);
+        }
 
         if (data.extracted_count > 0) {
             addMessage(`💡 [已自动记录 ${data.extracted_count} 条信息]`, 'system');
