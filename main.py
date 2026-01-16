@@ -96,6 +96,16 @@ def main():
             response = run_companion(user_input, thread_id=current_thread_id)
             print(response)
             print()
+            
+            # 后台提取生活信息（不影响对话响应）
+            try:
+                from src.agents.info_extractor import process_conversation
+                extracted_count = process_conversation(user_input, response)
+                if extracted_count > 0:
+                    print(f"💡 [已自动记录 {extracted_count} 条信息]")
+                    print()
+            except Exception:
+                pass  # 提取失败不影响主流程
 
         except KeyboardInterrupt:
             print("\n\n👋 再见！你的对话已保存，下次继续~")

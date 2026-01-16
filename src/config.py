@@ -64,3 +64,46 @@ def get_system_prompt(user_info: str | None = None) -> str:
     """
     info = user_info or DEFAULT_USER_INFO
     return f"{DEFAULT_COMPANION_PERSONA}\n\n{info}"
+
+
+def get_dynamic_user_context() -> str:
+    """获取动态的用户上下文（今日状态）。
+    
+    从数据库读取今日的用户状态，格式化为可注入 Prompt 的文本。
+    这让 AI 能了解用户今天的活动情况。
+    
+    Returns:
+        格式化的用户状态文本
+    """
+    try:
+        from src.memory.status_store import get_today_statuses
+        
+        statuses = get_today_statuses()
+        
+        if not statuses:
+            return ""
+        
+        # 格式化今日状态
+        lines = ["\n## 用户今日状态"]
+        for s in statuses:
+            time_str = s.recorded_at.strftime("%H:%M")
+            source_tag = "[AI记录]" if s.source == "ai" else ""
+            detail = f" - {s.detail}" if s.detail else ""
+            lines.append(f"- {time_str} {s.status_type}{detail} {source_tag}")
+        
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def get_full_system_prompt() -> str:
+    """获取完整的 System Prompt（包含动态上下文）。
+    
+    这是推荐使用的函数，会自动包含今日状态。
+    
+    Returns:
+        完整的 System Prompt
+    """
+    base = get_system_prompt()
+    dynamic = get_dynamic_user_context()
+    return f"{base}{dynamic}"

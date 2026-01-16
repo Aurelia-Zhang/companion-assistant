@@ -30,7 +30,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from src.config import get_system_prompt
+from src.config import get_system_prompt, get_full_system_prompt
 
 
 # ==================== 全局变量 ====================
@@ -65,10 +65,11 @@ def chat_node(state: CompanionState) -> dict:
     """
     messages = state["messages"]
     
-    # 如果对话刚开始，注入人设 Prompt
+    # 如果对话刚开始，注入人设 Prompt（包含今日状态）
     # System Message 应该是第一条消息
     if not messages or not isinstance(messages[0], SystemMessage):
-        system_prompt = get_system_prompt()
+        # 使用 get_full_system_prompt 包含今日用户状态
+        system_prompt = get_full_system_prompt()
         messages = [SystemMessage(content=system_prompt)] + list(messages)
     
     # 创建 LLM 实例
