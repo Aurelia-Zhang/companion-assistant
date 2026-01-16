@@ -5,5 +5,16 @@
 """
 
 from src.agents.simple_agent import create_simple_agent, run_agent
+from src.agents.companion_agent import (
+    create_companion_agent,
+    run_companion,
+    get_conversation_history,
+)
 
-__all__ = ["create_simple_agent", "run_agent"]
+__all__ = [
+    "create_simple_agent",
+    "run_agent",
+    "create_companion_agent",
+    "run_companion",
+    "get_conversation_history",
+]
