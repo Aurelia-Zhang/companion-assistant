@@ -4,6 +4,8 @@
 在系统中的角色:
     - 保存和查询 token 使用记录
     - 提供按日/月汇总统计
+    
+    v1.2.1: 重构使用统一的 db_client，支持 Supabase 和 SQLite
 
 核心逻辑:
     1. save_usage: 保存单条使用记录
@@ -11,43 +13,25 @@
     3. get_monthly_summary: 按月汇总
 """
 
-import sqlite3
-import os
 from datetime import date, datetime, timedelta
 from typing import Optional
-from contextlib import contextmanager
 
-from src.models.token_usage import TokenUsage, calculate_cost
-
-
-DEFAULT_DB_PATH = "data/conversations.db"
+from src.models.token_usage import TokenUsage
+from src.database import get_db_client
 
 
 class TokenStore:
     """Token 使用量存储类。"""
     
-    def __init__(self, db_path: str = DEFAULT_DB_PATH):
-        self.db_path = db_path
-        self._ensure_db_dir()
-        self._init_table()
+    def __init__(self):
+        self.db = get_db_client()
+        self._ensure_table()
     
-    def _ensure_db_dir(self) -> None:
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-    
-    @contextmanager
-    def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-    
-    def _init_table(self) -> None:
-        with self._get_connection() as conn:
-            conn.execute("""
+    def _ensure_table(self) -> None:
+        """确保数据库表存在（仅 SQLite 需要）。"""
+        from src.database.db_client import SQLiteClient
+        if isinstance(self.db, SQLiteClient):
+            self.db.execute_raw("""
                 CREATE TABLE IF NOT EXISTS token_usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TIMESTAMP NOT NULL,
@@ -59,33 +43,24 @@ class TokenStore:
                     cost_usd REAL NOT NULL
                 )
             """)
-            conn.execute("""
+            self.db.execute_raw("""
                 CREATE INDEX IF NOT EXISTS idx_token_timestamp 
                 ON token_usage(timestamp DESC)
             """)
-            conn.commit()
     
     def save_usage(self, usage: TokenUsage) -> int:
         """保存 token 使用记录。"""
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO token_usage 
-                (timestamp, model, agent_id, prompt_tokens, completion_tokens, total_tokens, cost_usd)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    usage.timestamp,
-                    usage.model,
-                    usage.agent_id,
-                    usage.prompt_tokens,
-                    usage.completion_tokens,
-                    usage.total_tokens,
-                    usage.cost_usd
-                )
-            )
-            conn.commit()
-            return cursor.lastrowid
+        data = {
+            "timestamp": usage.timestamp.isoformat(),
+            "model": usage.model,
+            "agent_id": usage.agent_id,
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "total_tokens": usage.total_tokens,
+            "cost_usd": usage.cost_usd
+        }
+        result = self.db.insert("token_usage", data)
+        return result.get("id", 0)
     
     def get_today_summary(self) -> dict:
         """获取今日汇总。"""
@@ -94,12 +69,12 @@ class TokenStore:
     
     def _get_date_summary(self, target_date: date) -> dict:
         """获取指定日期的汇总。"""
-        start = datetime.combine(target_date, datetime.min.time())
-        end = start + timedelta(days=1)
+        date_str = target_date.isoformat()
         
-        with self._get_connection() as conn:
-            row = conn.execute(
-                """
+        from src.database.db_client import SQLiteClient
+        if isinstance(self.db, SQLiteClient):
+            # SQLite: 使用原始 SQL
+            rows = self.db.execute_raw("""
                 SELECT 
                     COUNT(*) as call_count,
                     COALESCE(SUM(prompt_tokens), 0) as prompt_tokens,
@@ -107,19 +82,30 @@ class TokenStore:
                     COALESCE(SUM(total_tokens), 0) as total_tokens,
                     COALESCE(SUM(cost_usd), 0) as cost_usd
                 FROM token_usage
-                WHERE timestamp >= ? AND timestamp < ?
-                """,
-                (start, end)
-            ).fetchone()
+                WHERE date(timestamp) = ?
+            """, (date_str,))
+            row = dict(rows[0]) if rows else {}
+        else:
+            # Supabase: 获取所有然后过滤
+            all_rows = self.db.select(table="token_usage")
+            day_rows = [r for r in all_rows if r.get("timestamp", "").startswith(date_str)]
             
-            return {
-                "date": target_date.isoformat(),
-                "call_count": row["call_count"],
-                "prompt_tokens": row["prompt_tokens"],
-                "completion_tokens": row["completion_tokens"],
-                "total_tokens": row["total_tokens"],
-                "cost_usd": round(row["cost_usd"], 4)
+            row = {
+                "call_count": len(day_rows),
+                "prompt_tokens": sum(r.get("prompt_tokens", 0) for r in day_rows),
+                "completion_tokens": sum(r.get("completion_tokens", 0) for r in day_rows),
+                "total_tokens": sum(r.get("total_tokens", 0) for r in day_rows),
+                "cost_usd": sum(r.get("cost_usd", 0) for r in day_rows)
             }
+        
+        return {
+            "date": date_str,
+            "call_count": row.get("call_count", 0),
+            "prompt_tokens": row.get("prompt_tokens", 0),
+            "completion_tokens": row.get("completion_tokens", 0),
+            "total_tokens": row.get("total_tokens", 0),
+            "cost_usd": round(row.get("cost_usd", 0), 4)
+        }
     
     def get_monthly_summary(self, year: int = None, month: int = None) -> dict:
         """获取月度汇总。"""
@@ -127,42 +113,48 @@ class TokenStore:
         year = year or today.year
         month = month or today.month
         
-        start = datetime(year, month, 1)
-        if month == 12:
-            end = datetime(year + 1, 1, 1)
-        else:
-            end = datetime(year, month + 1, 1)
+        month_prefix = f"{year}-{month:02d}"
         
-        with self._get_connection() as conn:
-            row = conn.execute(
-                """
+        from src.database.db_client import SQLiteClient
+        if isinstance(self.db, SQLiteClient):
+            # SQLite: 使用原始 SQL
+            rows = self.db.execute_raw("""
                 SELECT 
                     COUNT(*) as call_count,
                     COALESCE(SUM(total_tokens), 0) as total_tokens,
                     COALESCE(SUM(cost_usd), 0) as cost_usd
                 FROM token_usage
-                WHERE timestamp >= ? AND timestamp < ?
-                """,
-                (start, end)
-            ).fetchone()
+                WHERE strftime('%Y-%m', timestamp) = ?
+            """, (month_prefix,))
+            row = dict(rows[0]) if rows else {}
+        else:
+            # Supabase: 获取所有然后过滤
+            all_rows = self.db.select(table="token_usage")
+            month_rows = [r for r in all_rows if r.get("timestamp", "").startswith(month_prefix)]
             
-            return {
-                "year": year,
-                "month": month,
-                "call_count": row["call_count"],
-                "total_tokens": row["total_tokens"],
-                "cost_usd": round(row["cost_usd"], 4)
+            row = {
+                "call_count": len(month_rows),
+                "total_tokens": sum(r.get("total_tokens", 0) for r in month_rows),
+                "cost_usd": sum(r.get("cost_usd", 0) for r in month_rows)
             }
+        
+        return {
+            "year": year,
+            "month": month,
+            "call_count": row.get("call_count", 0),
+            "total_tokens": row.get("total_tokens", 0),
+            "cost_usd": round(row.get("cost_usd", 0), 4)
+        }
 
 
 # 便捷函数
 _store: Optional[TokenStore] = None
 
 
-def get_token_store(db_path: str = DEFAULT_DB_PATH) -> TokenStore:
+def get_token_store() -> TokenStore:
     global _store
-    if _store is None or _store.db_path != db_path:
-        _store = TokenStore(db_path)
+    if _store is None:
+        _store = TokenStore()
     return _store
 
 

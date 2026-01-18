@@ -17,6 +17,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=3.0.2",
     "python-dotenv>=1.2.1",
     "pywebpush>=2.2.0",
+    "supabase>=2.27.2",
     "uvicorn>=0.40.0",
 ]
 

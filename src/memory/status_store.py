@@ -2,72 +2,42 @@
 文件名: status_store.py
 功能: 用户状态的数据库存储和检索
 在系统中的角色:
-    - 负责将用户状态持久化到 SQLite 数据库
+    - 负责将用户状态持久化到数据库
     - 提供状态的增删查功能
     - 被命令解析器调用来保存状态
     - 被 Agent 调用来获取用户最近的状态作为上下文
+    
+    v1.2.1: 重构使用统一的 db_client，支持 Supabase 和 SQLite
 
 核心逻辑:
-    1. 初始化时自动创建 user_status 表
-    2. save_status: 保存一条状态记录
-    3. get_recent_statuses: 获取最近 N 条状态
-    4. get_statuses_by_type: 按类型查询状态
-    5. get_today_statuses: 获取今日所有状态
+    1. save_status: 保存一条状态记录
+    2. get_recent_statuses: 获取最近 N 条状态
+    3. get_today_statuses: 获取今日所有状态
 """
 
-import sqlite3
-import os
 from datetime import datetime, date
-from typing import Optional
-from contextlib import contextmanager
+from typing import Optional, List
 
 from src.models.status import UserStatus, StatusType
-
-
-# 默认数据库路径，与对话记录使用同一个数据库
-DEFAULT_DB_PATH = "data/conversations.db"
+from src.database import get_db_client
 
 
 class StatusStore:
     """用户状态存储类。
     
     封装了所有与状态存储相关的数据库操作。
-    使用 SQLite 作为后端，轻量且无需额外服务。
+    自动选择 Supabase 或 SQLite 后端。
     """
     
-    def __init__(self, db_path: str = DEFAULT_DB_PATH):
-        """初始化状态存储。
-        
-        Args:
-            db_path: SQLite 数据库路径
-        """
-        self.db_path = db_path
-        self._ensure_db_dir()
-        self._init_table()
+    def __init__(self):
+        self.db = get_db_client()
+        self._ensure_table()
     
-    def _ensure_db_dir(self) -> None:
-        """确保数据库目录存在。"""
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-    
-    @contextmanager
-    def _get_connection(self):
-        """获取数据库连接的上下文管理器。
-        
-        使用 with 语句确保连接正确关闭。
-        """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # 让结果可以用列名访问
-        try:
-            yield conn
-        finally:
-            conn.close()
-    
-    def _init_table(self) -> None:
-        """初始化数据库表。"""
-        with self._get_connection() as conn:
-            conn.execute("""
+    def _ensure_table(self) -> None:
+        """确保数据库表存在（仅 SQLite 需要）。"""
+        from src.database.db_client import SQLiteClient
+        if isinstance(self.db, SQLiteClient):
+            self.db.execute_raw("""
                 CREATE TABLE IF NOT EXISTS user_status (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     status_type TEXT NOT NULL,
@@ -76,16 +46,10 @@ class StatusStore:
                     source TEXT NOT NULL DEFAULT 'command'
                 )
             """)
-            # 创建索引加速查询
-            conn.execute("""
+            self.db.execute_raw("""
                 CREATE INDEX IF NOT EXISTS idx_status_recorded_at 
                 ON user_status(recorded_at DESC)
             """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_status_type 
-                ON user_status(status_type)
-            """)
-            conn.commit()
     
     def save_status(self, status: UserStatus) -> int:
         """保存一条状态记录。
@@ -96,18 +60,16 @@ class StatusStore:
         Returns:
             新记录的 ID
         """
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO user_status (status_type, detail, recorded_at, source)
-                VALUES (?, ?, ?, ?)
-                """,
-                (status.status_type, status.detail, status.recorded_at, status.source)
-            )
-            conn.commit()
-            return cursor.lastrowid
+        data = {
+            "status_type": status.status_type,
+            "detail": status.detail,
+            "recorded_at": status.recorded_at.isoformat(),
+            "source": status.source
+        }
+        result = self.db.insert("user_status", data)
+        return result.get("id", 0)
     
-    def get_recent_statuses(self, limit: int = 10) -> list[UserStatus]:
+    def get_recent_statuses(self, limit: int = 10) -> List[UserStatus]:
         """获取最近的状态记录。
         
         Args:
@@ -116,104 +78,108 @@ class StatusStore:
         Returns:
             状态列表，按时间倒序
         """
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, status_type, detail, recorded_at, source
-                FROM user_status
-                ORDER BY recorded_at DESC
-                LIMIT ?
-                """,
-                (limit,)
-            ).fetchall()
-            
-            return [self._row_to_status(row) for row in rows]
+        rows = self.db.select(
+            table="user_status",
+            order_by="recorded_at",
+            order_desc=True,
+            limit=limit
+        )
+        return [self._row_to_status(row) for row in rows]
     
-    def get_today_statuses(self) -> list[UserStatus]:
+    def get_today_statuses(self) -> List[UserStatus]:
         """获取今日所有状态记录。
         
         Returns:
             今日状态列表，按时间正序
         """
         today = date.today().isoformat()
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, status_type, detail, recorded_at, source
-                FROM user_status
-                WHERE date(recorded_at) = ?
-                ORDER BY recorded_at ASC
-                """,
+        
+        # Supabase 和 SQLite 的日期过滤方式不同
+        from src.database.db_client import SQLiteClient
+        if isinstance(self.db, SQLiteClient):
+            # SQLite: 使用原始 SQL
+            rows = self.db.execute_raw(
+                "SELECT * FROM user_status WHERE date(recorded_at) = ? ORDER BY recorded_at ASC",
                 (today,)
-            ).fetchall()
+            )
+            return [self._row_to_status(dict(row)) for row in rows]
+        else:
+            # Supabase: 使用 gte/lt 过滤
+            from datetime import timedelta
+            start = datetime.combine(date.today(), datetime.min.time())
+            end = start + timedelta(days=1)
             
-            return [self._row_to_status(row) for row in rows]
+            # 使用 Supabase 的 RPC 或过滤
+            rows = self.db.select(
+                table="user_status",
+                order_by="recorded_at",
+                order_desc=False
+            )
+            # 手动过滤今日的记录
+            today_rows = [
+                row for row in rows 
+                if row.get("recorded_at", "").startswith(today)
+            ]
+            return [self._row_to_status(row) for row in today_rows]
     
     def get_statuses_by_type(
         self, 
         status_type: StatusType, 
         limit: int = 10
-    ) -> list[UserStatus]:
-        """按类型获取状态记录。
-        
-        Args:
-            status_type: 状态类型
-            limit: 最多返回多少条
-            
-        Returns:
-            状态列表，按时间倒序
-        """
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, status_type, detail, recorded_at, source
-                FROM user_status
-                WHERE status_type = ?
-                ORDER BY recorded_at DESC
-                LIMIT ?
-                """,
-                (status_type.value if isinstance(status_type, StatusType) else status_type, limit)
-            ).fetchall()
-            
-            return [self._row_to_status(row) for row in rows]
+    ) -> List[UserStatus]:
+        """按类型获取状态记录。"""
+        type_value = status_type.value if isinstance(status_type, StatusType) else status_type
+        rows = self.db.select(
+            table="user_status",
+            filters={"status_type": type_value},
+            order_by="recorded_at",
+            order_desc=True,
+            limit=limit
+        )
+        return [self._row_to_status(row) for row in rows]
     
-    def _row_to_status(self, row: sqlite3.Row) -> UserStatus:
+    def _row_to_status(self, row: dict) -> UserStatus:
         """将数据库行转换为 UserStatus 对象。"""
+        recorded_at = row.get("recorded_at")
+        if isinstance(recorded_at, str):
+            # 处理不同格式的时间字符串
+            try:
+                recorded_at = datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+            except ValueError:
+                recorded_at = datetime.now()
+        
         return UserStatus(
-            id=row["id"],
-            status_type=row["status_type"],
-            detail=row["detail"],
-            recorded_at=datetime.fromisoformat(row["recorded_at"]) 
-                if isinstance(row["recorded_at"], str) 
-                else row["recorded_at"],
-            source=row["source"]
+            id=row.get("id"),
+            status_type=row.get("status_type", ""),
+            detail=row.get("detail"),
+            recorded_at=recorded_at,
+            source=row.get("source", "command")
         )
 
 
 # ==================== 便捷函数 ====================
-# 提供模块级别的快捷访问
 
 _default_store: Optional[StatusStore] = None
 
 
-def get_store(db_path: str = DEFAULT_DB_PATH) -> StatusStore:
+def get_store() -> StatusStore:
     """获取默认的状态存储实例（单例模式）。"""
     global _default_store
-    if _default_store is None or _default_store.db_path != db_path:
-        _default_store = StatusStore(db_path)
+    if _default_store is None:
+        _default_store = StatusStore()
     return _default_store
 
 
-def save_status(status: UserStatus, db_path: str = DEFAULT_DB_PATH) -> int:
+def save_status(status: UserStatus) -> int:
     """保存状态（便捷函数）。"""
-    return get_store(db_path).save_status(status)
+    return get_store().save_status(status)
 
 
-def get_recent_statuses(limit: int = 10, db_path: str = DEFAULT_DB_PATH) -> list[UserStatus]:
+def get_recent_statuses(limit: int = 10) -> List[UserStatus]:
     """获取最近状态（便捷函数）。"""
-    return get_store(db_path).get_recent_statuses(limit)
+    return get_store().get_recent_statuses(limit)
 
 
-def get_today_statuses(db_path: str = DEFAULT_DB_PATH) -> list[UserStatus]:
+def get_today_statuses() -> List[UserStatus]:
     """获取今日状态（便捷函数）。"""
-    return get_store(db_path).get_today_statuses()
+    return get_store().get_today_statuses()

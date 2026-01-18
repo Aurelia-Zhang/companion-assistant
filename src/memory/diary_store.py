@@ -4,50 +4,34 @@
 在系统中的角色:
     - 日记 CRUD 操作
     - 被日记生成器和命令解析器调用
+    
+    v1.2.1: 重构使用统一的 db_client，支持 Supabase 和 SQLite
 
 核心逻辑:
-    1. 初始化时创建 diary 表
-    2. save_diary: 保存/更新日记
-    3. get_diary: 根据日期获取日记
+    1. save_diary: 保存/更新日记
+    2. get_diary: 根据日期获取日记
+    3. get_recent_diaries: 获取最近的日记
 """
 
-import sqlite3
-import os
 from datetime import date, datetime
-from typing import Optional
-from contextlib import contextmanager
+from typing import Optional, List
 
 from src.models.diary import DiaryEntry
-
-
-DEFAULT_DB_PATH = "data/conversations.db"
+from src.database import get_db_client
 
 
 class DiaryStore:
     """日记存储类。"""
     
-    def __init__(self, db_path: str = DEFAULT_DB_PATH):
-        self.db_path = db_path
-        self._ensure_db_dir()
-        self._init_table()
+    def __init__(self):
+        self.db = get_db_client()
+        self._ensure_table()
     
-    def _ensure_db_dir(self) -> None:
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-    
-    @contextmanager
-    def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-    
-    def _init_table(self) -> None:
-        with self._get_connection() as conn:
-            conn.execute("""
+    def _ensure_table(self) -> None:
+        """确保数据库表存在（仅 SQLite 需要）。"""
+        from src.database.db_client import SQLiteClient
+        if isinstance(self.db, SQLiteClient):
+            self.db.execute_raw("""
                 CREATE TABLE IF NOT EXISTS diary (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     diary_date DATE NOT NULL UNIQUE,
@@ -55,71 +39,67 @@ class DiaryStore:
                     generated_at TIMESTAMP NOT NULL
                 )
             """)
-            conn.execute("""
+            self.db.execute_raw("""
                 CREATE INDEX IF NOT EXISTS idx_diary_date 
                 ON diary(diary_date DESC)
             """)
-            conn.commit()
     
     def save_diary(self, entry: DiaryEntry) -> int:
         """保存或更新日记。同一天的日记会被覆盖。"""
-        with self._get_connection() as conn:
-            # 使用 REPLACE 语法，同日期则更新
-            cursor = conn.execute(
-                """
-                INSERT OR REPLACE INTO diary (diary_date, content, generated_at)
-                VALUES (?, ?, ?)
-                """,
-                (entry.diary_date.isoformat(), entry.content, entry.generated_at)
-            )
-            conn.commit()
-            return cursor.lastrowid
+        data = {
+            "diary_date": entry.diary_date.isoformat(),
+            "content": entry.content,
+            "generated_at": entry.generated_at.isoformat()
+        }
+        result = self.db.upsert("diary", data)
+        return result.get("id", 0)
     
     def get_diary(self, diary_date: date) -> Optional[DiaryEntry]:
         """根据日期获取日记。"""
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM diary WHERE diary_date = ?",
-                (diary_date.isoformat(),)
-            ).fetchone()
-            
-            if not row:
-                return None
-            
-            return DiaryEntry(
-                id=row["id"],
-                diary_date=date.fromisoformat(row["diary_date"]),
-                content=row["content"],
-                generated_at=datetime.fromisoformat(row["generated_at"])
-            )
+        rows = self.db.select(
+            table="diary",
+            filters={"diary_date": diary_date.isoformat()}
+        )
+        if not rows:
+            return None
+        return self._row_to_entry(rows[0])
     
-    def get_recent_diaries(self, limit: int = 7) -> list[DiaryEntry]:
+    def get_recent_diaries(self, limit: int = 7) -> List[DiaryEntry]:
         """获取最近的日记列表。"""
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM diary ORDER BY diary_date DESC LIMIT ?",
-                (limit,)
-            ).fetchall()
-            
-            return [
-                DiaryEntry(
-                    id=row["id"],
-                    diary_date=date.fromisoformat(row["diary_date"]),
-                    content=row["content"],
-                    generated_at=datetime.fromisoformat(row["generated_at"])
-                )
-                for row in rows
-            ]
+        rows = self.db.select(
+            table="diary",
+            order_by="diary_date",
+            order_desc=True,
+            limit=limit
+        )
+        return [self._row_to_entry(row) for row in rows]
+    
+    def _row_to_entry(self, row: dict) -> DiaryEntry:
+        """将数据库行转换为 DiaryEntry 对象。"""
+        diary_date = row.get("diary_date")
+        if isinstance(diary_date, str):
+            diary_date = date.fromisoformat(diary_date)
+        
+        generated_at = row.get("generated_at")
+        if isinstance(generated_at, str):
+            generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        
+        return DiaryEntry(
+            id=row.get("id"),
+            diary_date=diary_date,
+            content=row.get("content", ""),
+            generated_at=generated_at
+        )
 
 
 # 便捷函数
 _store: Optional[DiaryStore] = None
 
 
-def get_diary_store(db_path: str = DEFAULT_DB_PATH) -> DiaryStore:
+def get_diary_store() -> DiaryStore:
     global _store
-    if _store is None or _store.db_path != db_path:
-        _store = DiaryStore(db_path)
+    if _store is None:
+        _store = DiaryStore()
     return _store
 
 
@@ -131,5 +111,5 @@ def get_diary(diary_date: date) -> Optional[DiaryEntry]:
     return get_diary_store().get_diary(diary_date)
 
 
-def get_recent_diaries(limit: int = 7) -> list[DiaryEntry]:
+def get_recent_diaries(limit: int = 7) -> List[DiaryEntry]:
     return get_diary_store().get_recent_diaries(limit)
