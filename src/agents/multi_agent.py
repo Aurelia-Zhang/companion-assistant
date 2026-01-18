@@ -19,7 +19,6 @@ import re
 from typing import Optional
 from datetime import datetime
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from src.models.agent_persona import (
@@ -29,6 +28,7 @@ from src.models.agent_persona import (
     get_all_agents,
 )
 from src.config import get_dynamic_user_context
+from src.utils.llm_factory import create_llm
 
 
 def parse_mention(message: str) -> tuple[Optional[str], str]:
@@ -117,28 +117,12 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
     Returns:
         Agent 的回复
     """
-    import os
     from langchain_community.callbacks import get_openai_callback
     from src.models.token_usage import TokenUsage, calculate_cost
     from src.memory.token_store import save_usage
     
-    # 获取 Agent 专用的 API Key，如果没有则使用默认的
-    api_key = None
-    if agent.api_key_env:
-        api_key = os.getenv(agent.api_key_env)
-    if not api_key:
-        api_key = os.getenv("OPENAI_API_KEY")
-    
-    # 获取 Agent 配置的 API Base URL
-    api_base = agent.api_base_url or os.getenv("OPENAI_API_BASE")
-    
-    # 使用 Agent 配置的模型
-    llm = ChatOpenAI(
-        model=agent.model,
-        temperature=0.7, 
-        api_key=api_key,
-        base_url=api_base,
-    )
+    # 使用工厂函数创建 LLM 实例（支持 per-agent 配置）
+    llm = create_llm(agent=agent, temperature=0.7)
     
     # 构建 System Prompt (包含 RAG 记忆)
     user_context = get_dynamic_user_context()

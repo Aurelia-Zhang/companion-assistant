@@ -25,12 +25,13 @@ import os
 import sqlite3
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from src.config import get_system_prompt, get_full_system_prompt
+from src.utils.llm_factory import create_llm
+from src.models.agent_persona import get_default_agent
 
 
 # ==================== 全局变量 ====================
@@ -69,6 +70,9 @@ def chat_node(state: CompanionState) -> dict:
     
     messages = state["messages"]
     
+    # 获取默认 Agent 配置
+    agent_persona = get_default_agent()
+    
     # 如果对话刚开始，注入人设 Prompt（包含今日状态）
     # System Message 应该是第一条消息
     if not messages or not isinstance(messages[0], SystemMessage):
@@ -76,11 +80,8 @@ def chat_node(state: CompanionState) -> dict:
         system_prompt = get_full_system_prompt()
         messages = [SystemMessage(content=system_prompt)] + list(messages)
     
-    # 创建 LLM 实例
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.7,  # 稍微高一点，让回复更自然
-    )
+    # 使用工厂函数创建 LLM 实例（支持 per-agent 配置）
+    llm = create_llm(agent=agent_persona, temperature=0.7)
     
     # 使用 get_openai_callback 追踪 token
     with get_openai_callback() as cb:
@@ -92,8 +93,8 @@ def chat_node(state: CompanionState) -> dict:
     # 保存 token 使用记录
     if cb.total_tokens > 0:
         usage = TokenUsage(
-            model="gpt-4o-mini",
-            agent_id="xiaoban",
+            model=agent_persona.model,
+            agent_id=agent_persona.id,
             prompt_tokens=cb.prompt_tokens,
             completion_tokens=cb.completion_tokens,
             total_tokens=cb.total_tokens,

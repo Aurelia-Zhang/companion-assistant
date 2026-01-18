@@ -83,7 +83,27 @@ PRESET_AGENTS = [
 """.strip(),
         trigger_keywords=["运动", "健身", "跑步", "锻炼", "减肥", "健康", "久坐"],
         trigger_probability=0.05,
-        api_key_env="AGENT_TIYU_API_KEY"  # 可单独配置 API Key
+        # ===== 使用 OpenRouter API (OpenAI 兼容) =====
+        model="openai/gpt-4o-mini",  # OpenRouter 的模型名格式
+        api_base_url="https://openrouter.ai/api/v1",  # 👈 自定义 API Base URL
+        api_key_env="OPENROUTER_API_KEY"  # 👈 使用 OpenRouter 的 API Key
+    ),
+    # ==================== Claude 示例 Agent ====================
+    # 演示如何配置使用 Claude API 的 Agent
+    AgentPersona(
+        id="philosopher",
+        name="哲学家",
+        emoji="🦉",
+        personality="""
+你是一个有深度思考能力的哲学家助手，名字叫"哲学家"。
+性格：睿智、深邃、善于引导思考。
+说话风格：喜欢用苏格拉底式提问，引导用户深入思考。
+职责：帮助用户探索人生哲理、分析问题本质、提供不同视角。
+""".strip(),
+        trigger_keywords=["为什么", "意义", "人生", "哲学", "思考", "本质"],
+        trigger_probability=0.05,
+        model="claude-sonnet-4-20250514",  # 使用 Claude 模型
+        api_key_env="ANTHROPIC_API_KEY"  # Claude API Key
     ),
 ]
 

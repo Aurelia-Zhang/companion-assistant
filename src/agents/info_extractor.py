@@ -23,8 +23,9 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+
+from src.utils.llm_factory import create_llm_simple
 
 from src.models.status import UserStatus, StatusType
 from src.memory.status_store import save_status
@@ -74,7 +75,7 @@ def extract_life_info(user_message: str, ai_response: str) -> list[dict]:
         提取到的信息列表，每项包含 type 和 detail
     """
     # 使用较小的模型，降低成本
-    llm = ChatOpenAI(
+    llm = create_llm_simple(
         model="gpt-4o-mini",
         temperature=0,  # 低 temperature 保证稳定输出
     )

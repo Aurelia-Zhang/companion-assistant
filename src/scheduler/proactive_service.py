@@ -19,8 +19,9 @@ from typing import Optional
 import json
 import os
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage
+
+from src.utils.llm_factory import create_llm_simple
 
 from src.models.proactive_rule import ProactiveRule, RuleType, should_trigger, get_default_rules
 from src.memory.status_store import get_today_statuses, get_recent_statuses
@@ -143,7 +144,7 @@ class ProactiveService:
     
     def _generate_message(self, rule: ProactiveRule) -> Optional[str]:
         """根据规则生成主动消息。"""
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.8)
+        llm = create_llm_simple(model="gpt-4o-mini", temperature=0.8)
         
         # 获取今日状态作为上下文
         today_statuses = get_today_statuses()

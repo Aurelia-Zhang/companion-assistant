@@ -26,7 +26,17 @@ load_dotenv()
 
 
 def main():
-    """主函数：运行交互式陪伴对话。"""
+    """主函数：运行交互式陪伴对话。
+    
+    ⚠️ 已废弃：建议使用 main_v2.py
+    """
+    print()
+    print("=" * 50)
+    print("⚠️  警告: main.py 已废弃")
+    print("    建议使用: uv run python main_v2.py")
+    print("=" * 50)
+    print()
+    
     # 检查 API 密钥是否配置
     if not os.getenv("OPENAI_API_KEY"):
         print("❌ 错误: 请先配置 OPENAI_API_KEY")
