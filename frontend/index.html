@@ -1,56 +1,45 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#000">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="小伴">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <title>小伴 - AI 陪伴助手</title>
+    <title>AI Companion</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="app">
-        <!-- 头部 -->
         <header class="header">
-            <div class="header-title">
-                <span class="terminal-prompt">~</span> 小伴
-            </div>
-            <div class="header-status" id="status-indicator">●</div>
+            <div class="header-title">AI Companion</div>
+            <div class="header-status" id="status-indicator">online</div>
         </header>
 
-        <!-- 消息区域 -->
-        <main class="messages" id="messages">
-            <div class="message system">
-                <span class="terminal-prompt">$</span> 欢迎回来！输入消息开始聊天，或使用 /help 查看命令
-            </div>
-        </main>
+        <main class="messages" id="messages"></main>
 
-        <!-- 快捷按钮区 -->
-        <div class="quick-actions" id="quick-actions">
-            <button class="quick-btn" data-cmd="/wake">🌅 起床</button>
-            <button class="quick-btn" data-cmd="/meal breakfast">🍳 早饭</button>
-            <button class="quick-btn" data-cmd="/meal lunch">🍱 午饭</button>
-            <button class="quick-btn" data-cmd="/meal dinner">🍽️ 晚饭</button>
-            <button class="quick-btn" data-cmd="/study start">📚 学习</button>
-            <button class="quick-btn" data-cmd="/study end">✅ 结束</button>
-            <button class="quick-btn" data-cmd="/sleep">🌙 睡觉</button>
-            <button class="quick-btn" data-cmd="/status">📊 状态</button>
+        <!-- 快捷按钮 (聊天中显示) -->
+        <div class="quick-actions" id="quick-actions" style="display: none;">
+            <button class="quick-btn" data-cmd="/wake">wake</button>
+            <button class="quick-btn" data-cmd="/meal breakfast">breakfast</button>
+            <button class="quick-btn" data-cmd="/meal lunch">lunch</button>
+            <button class="quick-btn" data-cmd="/status">status</button>
+            <button class="quick-btn" data-cmd="/quit">quit</button>
         </div>
 
-        <!-- 输入区域 -->
         <footer class="input-area">
             <div class="input-wrapper">
                 <span class="input-prompt">></span>
-                <input type="text" id="input" placeholder="输入消息或命令..." autocomplete="off">
-                <button id="send-btn" class="send-btn">↵</button>
+                <input type="text" id="input" placeholder="@agent or /command" autocomplete="off">
+                <button id="send-btn" class="send-btn">-></button>
             </div>
         </footer>
     </div>
 
     <script src="app.js"></script>
 </body>
+
 </html>

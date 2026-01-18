@@ -129,18 +129,33 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
     if not api_key:
         api_key = os.getenv("OPENAI_API_KEY")
     
+    # 获取 Agent 配置的 API Base URL
+    api_base = agent.api_base_url or os.getenv("OPENAI_API_BASE")
+    
+    # 使用 Agent 配置的模型
     llm = ChatOpenAI(
-        model="gpt-4o-mini", 
+        model=agent.model,
         temperature=0.7, 
         api_key=api_key,
+        base_url=api_base,
     )
     
-    # 构建 System Prompt
+    # 构建 System Prompt (包含 RAG 记忆)
     user_context = get_dynamic_user_context()
+    
+    # 获取 RAG 相关记忆
+    try:
+        from src.memory.rag_memory import get_memory_context
+        memory_context = get_memory_context(message)
+    except Exception:
+        memory_context = ""
+    
     system_prompt = f"""
 {agent.personality}
 
 {user_context}
+
+{memory_context}
 
 ## 回复要求
 - 保持你的人设特点

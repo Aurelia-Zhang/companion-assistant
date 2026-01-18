@@ -104,9 +104,17 @@ def parse_and_execute(user_input: str) -> CommandResult:
     if command_name == "context":
         return _handle_context_command()
     
+    # 特殊命令: 导入文件到记忆库
+    if command_name == "import":
+        return _handle_import_command(args)
+    
+    # 特殊命令: 查看记忆库
+    if command_name == "memory":
+        return _handle_memory_command(args)
+    
     # 查找命令映射
     if command_name not in COMMAND_MAPPING:
-        return CommandResult(False, f"❌ 未知命令: /{command_name}，输入 /help 查看帮助")
+        return CommandResult(False, f"未知命令: /{command_name}，输入 /help 查看帮助")
     
     status_type, needs_subcommand = COMMAND_MAPPING[command_name]
     
@@ -272,38 +280,91 @@ def _handle_context_command() -> CommandResult:
     return CommandResult(True, "\n".join(lines))
 
 
+def _handle_import_command(args: str) -> CommandResult:
+    """处理 /import 命令：导入文件到记忆库。"""
+    from src.memory.rag_memory import import_file
+    
+    if not args:
+        return CommandResult(False, "用法: /import <文件路径>")
+    
+    file_path = args.strip()
+    
+    try:
+        count = import_file(file_path)
+        return CommandResult(True, f"已导入 {count} 个片段到记忆库")
+    except FileNotFoundError:
+        return CommandResult(False, f"文件不存在: {file_path}")
+    except Exception as e:
+        return CommandResult(False, f"导入失败: {e}")
+
+
+def _handle_memory_command(args: str) -> CommandResult:
+    """处理 /memory 命令：查看或搜索记忆库。"""
+    from src.memory.rag_memory import list_imported_documents, search_memory
+    
+    if args.startswith("search "):
+        query = args[7:].strip()
+        results = search_memory(query, k=3)
+        
+        if not results:
+            return CommandResult(True, "未找到相关记忆")
+        
+        lines = ["搜索结果:", "-" * 30]
+        for r in results:
+            lines.append(f"[{r['source']}]")
+            lines.append(r['content'][:200])
+            lines.append("")
+        
+        return CommandResult(True, "\n".join(lines))
+    
+    # 默认列出已导入文档
+    docs = list_imported_documents()
+    if not docs:
+        return CommandResult(True, "记忆库为空，用 /import <文件> 导入")
+    
+    lines = ["已导入文档:", "-" * 30]
+    for doc in docs:
+        lines.append(f"  - {doc}")
+    
+    return CommandResult(True, "\n".join(lines))
+
+
 def _handle_help_command() -> CommandResult:
     """处理 /help 命令：显示帮助信息。"""
     help_text = """
-📖 **快捷命令帮助**
-━━━━━━━━━━━━━━━━━━
-**作息**
-  /wake [备注]     - 起床
-  /sleep [备注]    - 睡觉
-  /shower [备注]   - 洗澡
+快捷命令帮助
+------------------
+作息
+  /wake           - 起床
+  /sleep          - 睡觉
+  /shower         - 洗澡
 
-**饮食**
-  /meal breakfast [备注] - 早饭
-  /meal lunch [备注]     - 午饭
-  /meal dinner [备注]    - 晚饭
-  /drink [备注]          - 喝饮料
+饮食
+  /meal breakfast - 早饭
+  /meal lunch     - 午饭
+  /meal dinner    - 晚饭
 
-**学习**
-  /study start [备注] - 开始学习
-  /study end [备注]   - 结束学习
+学习
+  /study start    - 开始学习
+  /study end      - 结束学习
 
-**其他**
-  /out [备注]      - 外出
-  /back [备注]     - 回来
-  /mood [心情]     - 记录心情
-  /note [内容]     - 自由记录
+其他
+  /out            - 外出
+  /back           - 回来
+  /mood [心情]    - 记录心情
+  /note [内容]    - 自由记录
 
-**查看**
-  /status          - 查看今日状态
-  /diary [日期]    - 查看日记
-  /tokens [month]  - Token 统计
-  /context         - 查看 AI 上下文
-━━━━━━━━━━━━━━━━━━
+查看
+  /status         - 今日状态
+  /diary [日期]   - 查看日记
+  /tokens [month] - Token统计
+  /context        - AI上下文
+
+记忆
+  /import <文件>  - 导入文件
+  /memory         - 查看记忆库
+  /memory search  - 搜索记忆
+------------------
 """.strip()
     return CommandResult(True, help_text)
 

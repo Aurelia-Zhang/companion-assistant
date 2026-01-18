@@ -26,6 +26,8 @@ class AgentPersona(BaseModel):
         trigger_keywords: 触发关键词（用户消息包含这些词时可能触发）
         trigger_probability: 概率触发（即使没关键词也可能随机加入）
         is_default: 是否是默认 Agent（用户直接聊天时使用）
+        model: 使用的模型名称
+        api_base_url: API Base URL（可选，用于不同模型提供商）
         api_key_env: 专用 API Key 的环境变量名（可选）
     """
     id: str
@@ -35,6 +37,8 @@ class AgentPersona(BaseModel):
     trigger_keywords: list[str] = Field(default_factory=list)
     trigger_probability: float = 0.0  # 0-1，随机触发概率
     is_default: bool = False
+    model: str = "gpt-4o-mini"  # 模型名称
+    api_base_url: Optional[str] = None  # 如 "https://api.openai.com/v1"
     api_key_env: Optional[str] = None  # 如 "AGENT_XUEBA_API_KEY"
 
 

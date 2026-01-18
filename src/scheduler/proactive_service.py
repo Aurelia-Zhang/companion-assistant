@@ -199,10 +199,19 @@ def check_and_send() -> Optional[str]:
     Returns:
         生成的消息，或 None 如果没有触发
     """
+    from src.scheduler.push_service import notify_user
+    
     service = get_proactive_service()
     result = service.check_all_rules()
     if result:
         rule, message = result
         print(f"[主动消息] 触发规则: {rule.name}")
+        
+        # 发送 Web Push 通知
+        try:
+            notify_user(message)
+        except Exception as e:
+            print(f"[推送] 发送失败: {e}")
+        
         return message
     return None

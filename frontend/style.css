@@ -1,20 +1,12 @@
 /* 
- * 小伴 - AI 陪伴助手
- * 类终端风格的移动端 UI
+ * AI 陪伴助手 v1.2
+ * 纯黑白终端风格
  */
 
 :root {
-    /* 深色终端配色 */
-    --bg-primary: #0d1117;
-    --bg-secondary: #161b22;
-    --bg-tertiary: #21262d;
-    --text-primary: #c9d1d9;
-    --text-secondary: #8b949e;
-    --accent: #58a6ff;
-    --accent-green: #7ee787;
-    --accent-yellow: #d29922;
-    --accent-red: #f85149;
-    --border: #30363d;
+    --bg: #000;
+    --text: #fff;
+    --text-dim: #888;
 }
 
 * {
@@ -26,10 +18,10 @@
 body {
     font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
     font-size: 14px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: var(--bg);
+    color: var(--text);
     height: 100vh;
-    height: 100dvh; /* 动态视口高度，适配 iPhone */
+    height: 100dvh;
     overflow: hidden;
 }
 
@@ -45,29 +37,16 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid #333;
 }
 
 .header-title {
-    font-size: 16px;
-    font-weight: 600;
-}
-
-.terminal-prompt {
-    color: var(--accent-green);
-    margin-right: 8px;
+    font-size: 14px;
 }
 
 .header-status {
-    color: var(--accent-green);
+    color: var(--text-dim);
     font-size: 12px;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
 }
 
 /* 消息区域 */
@@ -77,52 +56,31 @@ body {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
 }
 
 .message {
-    padding: 8px 12px;
-    border-radius: 4px;
-    line-height: 1.5;
+    line-height: 1.6;
     word-break: break-word;
 }
 
-.message.user {
-    background: var(--bg-tertiary);
-    border-left: 3px solid var(--accent);
-}
-
-.message.user::before {
-    content: '> ';
-    color: var(--accent);
-}
-
-.message.assistant {
-    background: var(--bg-secondary);
-    border-left: 3px solid var(--accent-green);
-}
-
-.message.assistant .sender {
-    color: var(--accent-green);
-    font-weight: 600;
+.message .sender {
+    color: var(--text-dim);
+    font-size: 12px;
     margin-bottom: 4px;
 }
 
+.message .content {
+    white-space: pre-wrap;
+}
+
 .message.system {
-    color: var(--text-secondary);
+    color: var(--text-dim);
     font-size: 12px;
 }
 
-.message.command {
-    background: var(--bg-tertiary);
-    border-left: 3px solid var(--accent-yellow);
-    font-size: 13px;
-}
-
 .message.error {
-    background: rgba(248, 81, 73, 0.1);
-    border-left: 3px solid var(--accent-red);
-    color: var(--accent-red);
+    color: #f00;
 }
 
 /* 快捷按钮 */
@@ -131,49 +89,39 @@ body {
     flex-wrap: wrap;
     gap: 8px;
     padding: 12px 16px;
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    overflow-x: auto;
+    border-top: 1px solid #333;
 }
 
 .quick-btn {
-    padding: 8px 12px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text-primary);
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #333;
+    color: var(--text);
     font-family: inherit;
     font-size: 12px;
     cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s;
 }
 
 .quick-btn:active {
-    background: var(--accent);
-    color: var(--bg-primary);
-    transform: scale(0.95);
+    background: #333;
 }
 
 /* 输入区域 */
 .input-area {
     padding: 12px 16px;
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    padding-bottom: calc(12px + env(safe-area-inset-bottom)); /* iPhone 底部安全区 */
+    border-top: 1px solid #333;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
 
 .input-wrapper {
     display: flex;
     align-items: center;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    border: 1px solid #333;
     padding: 0 12px;
 }
 
 .input-prompt {
-    color: var(--accent);
+    color: var(--text-dim);
     margin-right: 8px;
 }
 
@@ -182,32 +130,28 @@ body {
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-primary);
+    color: var(--text);
     font-family: inherit;
     font-size: 14px;
     padding: 12px 0;
 }
 
 #input::placeholder {
-    color: var(--text-secondary);
+    color: var(--text-dim);
 }
 
 .send-btn {
-    background: var(--accent);
-    border: none;
-    color: var(--bg-primary);
+    background: transparent;
+    border: 1px solid #333;
+    color: var(--text);
     width: 32px;
     height: 32px;
-    border-radius: 6px;
-    font-size: 16px;
+    font-size: 14px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .send-btn:active {
-    transform: scale(0.9);
+    background: #333;
 }
 
 /* 加载动画 */
@@ -217,31 +161,37 @@ body {
 }
 
 .typing span {
-    width: 6px;
-    height: 6px;
-    background: var(--accent-green);
-    border-radius: 50%;
-    animation: bounce 1.4s infinite ease-in-out both;
+    width: 4px;
+    height: 4px;
+    background: var(--text-dim);
+    animation: blink 1s infinite;
 }
 
-.typing span:nth-child(1) { animation-delay: -0.32s; }
-.typing span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-    0%, 80%, 100% { transform: scale(0); }
-    40% { transform: scale(1); }
+.typing span:nth-child(2) {
+    animation-delay: 0.2s;
 }
 
-/* 滚动条样式 */
+.typing span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* 滚动条 */
 .messages::-webkit-scrollbar {
-    width: 6px;
-}
-
-.messages::-webkit-scrollbar-track {
-    background: var(--bg-primary);
+    width: 4px;
 }
 
 .messages::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 3px;
+    background: #333;
 }
