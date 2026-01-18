@@ -63,6 +63,10 @@ def chat_node(state: CompanionState) -> dict:
     Returns:
         包含 AI 回复的状态更新
     """
+    from langchain_community.callbacks import get_openai_callback
+    from src.models.token_usage import TokenUsage
+    from src.memory.token_store import save_usage
+    
     messages = state["messages"]
     
     # 如果对话刚开始，注入人设 Prompt（包含今日状态）
@@ -78,8 +82,24 @@ def chat_node(state: CompanionState) -> dict:
         temperature=0.7,  # 稍微高一点，让回复更自然
     )
     
-    # 调用 LLM
-    response = llm.invoke(messages)
+    # 使用 get_openai_callback 追踪 token
+    with get_openai_callback() as cb:
+        response = llm.invoke(messages)
+    
+    # DEBUG: 打印 token 信息
+    print(f"[DEBUG Token] prompt={cb.prompt_tokens}, completion={cb.completion_tokens}, total={cb.total_tokens}")
+    
+    # 保存 token 使用记录
+    if cb.total_tokens > 0:
+        usage = TokenUsage(
+            model="gpt-4o-mini",
+            agent_id="xiaoban",
+            prompt_tokens=cb.prompt_tokens,
+            completion_tokens=cb.completion_tokens,
+            total_tokens=cb.total_tokens,
+            cost_usd=cb.total_cost
+        )
+        save_usage(usage)
     
     return {"messages": [response]}
 

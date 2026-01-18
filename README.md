@@ -1,14 +1,61 @@
-# AI Companion Assistant (AI 陪伴助手)
+# AI 陪伴助手 - 项目概览
 
-## 项目简介
-本项目旨在开发一个智能 AI 陪伴助手，具备自然对话、长期记忆和个性化互动能力。
-项目采用“用户主导，AI 辅助”的开发模式，注重代码规范、文档齐全和技术前沿性。
+> 一个提供"极致陪伴"的 AI 助手，支持主动关心、多智能体、状态记录等功能。
 
-## 目录结构
-- `src/`: 源代码目录
-- `tests/`: 测试代码目录
-- `docs/`: 项目文档（开发协议、技术决策、进度记录等）
-- `scripts/`: 辅助脚本
+## 🎯 项目状态
+- **当前版本**: v1.0.0 MVP
+- **开发阶段**: v1.1 迭代开发中
 
-## 快速开始
-*(待补充：环境配置与启动命令)*
+## ✅ 已完成功能 (v1.0)
+- 🐱 多 Agent 系统 (小伴/学霸君/运动达人)
+- 💬 对话记忆持久化 (SQLite)
+- 📝 快捷状态命令 (`/wake`, `/sleep`, `/meal` 等)
+- 🤖 AI 自动提取生活信息
+- 🔔 主动消息系统 (规则 + 概率触发)
+- 📱 PWA 前端 (iPhone 可安装)
+- ☁️ 云部署支持 (Railway)
+
+## 🛠️ 技术栈
+- **Agent 框架**: LangGraph
+- **后端**: FastAPI + Python 3.11
+- **前端**: PWA (原生 HTML/CSS/JS)
+- **数据库**: SQLite
+- **调度**: APScheduler
+- **LLM**: OpenAI GPT-4o-mini
+
+## 📁 项目结构
+```
+companion-assistant/
+├── src/
+│   ├── agents/      # Agent 实现
+│   ├── api/         # FastAPI 路由
+│   ├── commands/    # 命令解析
+│   ├── memory/      # 数据存储
+│   ├── models/      # 数据模型
+│   └── scheduler/   # 主动消息调度
+├── frontend/        # PWA 前端
+├── docs/            # 文档
+├── main.py          # CLI 入口
+└── server.py        # API 入口
+```
+
+## 🚀 快速开始
+```bash
+# 安装依赖
+uv sync
+
+# 配置 API Key
+cp .env.example .env
+# 编辑 .env 填入 OPENAI_API_KEY
+
+# 启动 CLI
+uv run python main.py
+
+# 启动 Web 服务
+uv run python server.py
+```
+
+## 📚 文档
+- [部署指南](docs/deployment_guide.md)
+- [开发协议](docs/development_protocol.md)
+- [编码规范](docs/coding_standards.md)

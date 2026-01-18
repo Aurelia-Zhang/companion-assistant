@@ -118,6 +118,9 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
         Agent 的回复
     """
     import os
+    from langchain_community.callbacks import get_openai_callback
+    from src.models.token_usage import TokenUsage, calculate_cost
+    from src.memory.token_store import save_usage
     
     # 获取 Agent 专用的 API Key，如果没有则使用默认的
     api_key = None
@@ -126,7 +129,11 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
     if not api_key:
         api_key = os.getenv("OPENAI_API_KEY")
     
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, api_key=api_key)
+    llm = ChatOpenAI(
+        model="gpt-4o-mini", 
+        temperature=0.7, 
+        api_key=api_key,
+    )
     
     # 构建 System Prompt
     user_context = get_dynamic_user_context()
@@ -146,7 +153,25 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
         HumanMessage(content=message)
     ]
     
-    response = llm.invoke(messages)
+    # 使用 get_openai_callback 追踪 token
+    with get_openai_callback() as cb:
+        response = llm.invoke(messages)
+    
+    # DEBUG: 打印回调捕获的信息
+    print(f"[DEBUG Token] prompt={cb.prompt_tokens}, completion={cb.completion_tokens}, total={cb.total_tokens}, cost={cb.total_cost}")
+    
+    # 保存 token 使用记录
+    if cb.total_tokens > 0:
+        usage = TokenUsage(
+            model="gpt-4o-mini",
+            agent_id=agent.id,
+            prompt_tokens=cb.prompt_tokens,
+            completion_tokens=cb.completion_tokens,
+            total_tokens=cb.total_tokens,
+            cost_usd=cb.total_cost
+        )
+        save_usage(usage)
+    
     return response.content
 
 

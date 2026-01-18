@@ -92,6 +92,18 @@ def parse_and_execute(user_input: str) -> CommandResult:
     if command_name == "help":
         return _handle_help_command()
     
+    # 特殊命令: 日记
+    if command_name == "diary":
+        return _handle_diary_command(args)
+    
+    # 特殊命令: Token 统计
+    if command_name == "tokens":
+        return _handle_tokens_command(args)
+    
+    # 特殊命令: 查看 AI 上下文
+    if command_name == "context":
+        return _handle_context_command()
+    
     # 查找命令映射
     if command_name not in COMMAND_MAPPING:
         return CommandResult(False, f"❌ 未知命令: /{command_name}，输入 /help 查看帮助")
@@ -178,6 +190,88 @@ def _handle_status_command() -> CommandResult:
     return CommandResult(True, "\n".join(lines))
 
 
+def _handle_diary_command(args: str) -> CommandResult:
+    """处理 /diary 命令：查看日记。"""
+    from datetime import date
+    from src.agents.diary_generator import get_or_generate_diary
+    
+    # 解析日期参数
+    if args:
+        try:
+            diary_date = date.fromisoformat(args.strip())
+        except ValueError:
+            return CommandResult(False, "❌ 日期格式错误，请使用 YYYY-MM-DD 格式，如 /diary 2026-01-17")
+    else:
+        diary_date = date.today()
+    
+    # 获取或生成日记
+    entry = get_or_generate_diary(diary_date)
+    
+    if entry is None:
+        return CommandResult(True, f"📭 {diary_date} 暂无日记")
+    
+    # 格式化输出
+    date_str = entry.diary_date.strftime("%Y年%m月%d日")
+    lines = [
+        f"📔 **{date_str} 的日记**",
+        "-" * 30,
+        entry.content,
+        "-" * 30,
+        f"生成于: {entry.generated_at.strftime('%H:%M')}"
+    ]
+    
+    return CommandResult(True, "\n".join(lines))
+
+
+def _handle_tokens_command(args: str) -> CommandResult:
+    """处理 /tokens 命令：查看 token 使用统计。"""
+    from src.memory.token_store import get_today_summary, get_monthly_summary
+    
+    if args.lower() == "month":
+        # 月度统计
+        summary = get_monthly_summary()
+        lines = [
+            f"📊 **{summary['year']}年{summary['month']}月 Token 统计**",
+            "-" * 30,
+            f"  调用次数: {summary['call_count']}",
+            f"  总 Token: {summary['total_tokens']:,}",
+            f"  费用: ${summary['cost_usd']:.4f}",
+            "-" * 30,
+        ]
+    else:
+        # 今日统计
+        summary = get_today_summary()
+        lines = [
+            f"📊 **今日 Token 统计**",
+            "-" * 30,
+            f"  调用次数: {summary['call_count']}",
+            f"  输入 Token: {summary['prompt_tokens']:,}",
+            f"  输出 Token: {summary['completion_tokens']:,}",
+            f"  总 Token: {summary['total_tokens']:,}",
+            f"  费用: ${summary['cost_usd']:.4f}",
+            "-" * 30,
+        ]
+    
+    return CommandResult(True, "\n".join(lines))
+
+
+def _handle_context_command() -> CommandResult:
+    """处理 /context 命令：显示当前 AI 上下文。"""
+    from src.config import get_full_system_prompt
+    
+    prompt = get_full_system_prompt()
+    
+    lines = [
+        "🔍 **当前 AI 上下文 (System Prompt)**",
+        "=" * 40,
+        prompt,
+        "=" * 40,
+        f"总字符数: {len(prompt)}"
+    ]
+    
+    return CommandResult(True, "\n".join(lines))
+
+
 def _handle_help_command() -> CommandResult:
     """处理 /help 命令：显示帮助信息。"""
     help_text = """
@@ -206,6 +300,9 @@ def _handle_help_command() -> CommandResult:
 
 **查看**
   /status          - 查看今日状态
+  /diary [日期]    - 查看日记
+  /tokens [month]  - Token 统计
+  /context         - 查看 AI 上下文
 ━━━━━━━━━━━━━━━━━━
 """.strip()
     return CommandResult(True, help_text)
