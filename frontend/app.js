@@ -195,6 +195,10 @@ function handleInput() {
             showSessionList();
         } else if (input === '/agents') {
             showAgents();
+        } else if (input === '/push') {
+            subscribeToPush();
+        } else if (input === '/testpush') {
+            testPush();
         } else if (input.startsWith('/join ')) {
             const num = parseInt(input.substring(6)) - 1;
             if (sessionList[num]) {
@@ -212,7 +216,7 @@ function handleInput() {
                 addSystemMessage('Usage: @agent_name');
             }
         } else if (input.startsWith('/')) {
-            addSystemMessage('Unknown command. Use /list, /agents, or @agent');
+            addSystemMessage('Unknown command. Use /list, /agents, /push, or @agent');
         } else {
             addSystemMessage('Use @agent to start chat');
         }
@@ -252,6 +256,85 @@ quickActionsEl.addEventListener('click', (e) => {
     }
 });
 
+// ==================== Push Notifications ====================
+
+// VAPID 公钥 - 需要替换为实际的公钥
+const VAPID_PUBLIC_KEY = window.VAPID_PUBLIC_KEY || '';
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function subscribeToPush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        addSystemMessage('❌ 此浏览器不支持推送通知');
+        return;
+    }
+
+    try {
+        // 请求通知权限
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            addSystemMessage('❌ 推送通知权限被拒绝');
+            return;
+        }
+
+        // 获取 VAPID 公钥
+        let vapidKey = VAPID_PUBLIC_KEY;
+        if (!vapidKey) {
+            const response = await fetch(`${API_BASE}/api/push/vapid-key`);
+            const data = await response.json();
+            vapidKey = data.publicKey;
+        }
+
+        if (!vapidKey) {
+            addSystemMessage('❌ VAPID 公钥未配置');
+            return;
+        }
+
+        // 订阅
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidKey)
+        });
+
+        // 发送订阅信息到后端
+        await fetch(`${API_BASE}/api/push/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                endpoint: subscription.endpoint,
+                keys: {
+                    p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                    auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                }
+            })
+        });
+
+        addSystemMessage('✅ 推送通知已订阅！');
+    } catch (error) {
+        addSystemMessage(`❌ 订阅失败: ${error.message}`);
+    }
+}
+
+async function testPush() {
+    try {
+        const response = await fetch(`${API_BASE}/api/push/test`, { method: 'POST' });
+        const data = await response.json();
+        addSystemMessage(`📲 测试推送已发送 (${data.sent} 个订阅)`);
+    } catch (error) {
+        addSystemMessage('❌ 测试推送失败');
+    }
+}
+
 // ==================== Init ====================
 
 showMainMenu();
@@ -259,3 +342,46 @@ showMainMenu();
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => { });
 }
+
+// 添加推送相关命令提示
+const originalShowMainMenu = showMainMenu;
+showMainMenu = function () {
+    currentSession = null;
+    quickActionsEl.style.display = 'none';
+    clearMessages();
+
+    let menu = `Commands:
+  @agent      - new private chat
+  @a @b       - new group chat
+  /list       - show sessions
+  /agents     - show agents
+  /push       - subscribe to notifications
+  /testpush   - test push notification`;
+
+    addSystemMessage(menu);
+    inputEl.placeholder = '@agent or /command';
+};
+
+// 扩展命令处理
+const originalHandleInput = handleInput;
+handleInput = function () {
+    const input = inputEl.value.trim();
+
+    if (!currentSession) {
+        if (input === '/push') {
+            inputEl.value = '';
+            subscribeToPush();
+            return;
+        }
+        if (input === '/testpush') {
+            inputEl.value = '';
+            testPush();
+            return;
+        }
+    }
+
+    originalHandleInput.call(this);
+};
+
+// 重新显示菜单
+showMainMenu();
