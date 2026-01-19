@@ -29,6 +29,7 @@ from src.models.agent_persona import (
 )
 from src.config import get_dynamic_user_context
 from src.utils.llm_factory import create_llm
+from src.tools.email_tool import get_email_tools
 
 
 def parse_mention(message: str) -> tuple[Optional[str], str]:
@@ -145,6 +146,11 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
 - 保持你的人设特点
 - 回复自然、简洁
 - 可以使用 emoji
+
+## 可用工具
+你可以使用 send_email_tool 发送邮件给用户，但请谨慎使用：
+- 仅在用户明确要求或有重要事项时发送
+- 不要频繁发送无意义的邮件
 """.strip()
     
     messages = [
@@ -152,9 +158,25 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
         HumanMessage(content=message)
     ]
     
+    # 绑定工具
+    tools = get_email_tools()
+    llm_with_tools = llm.bind_tools(tools)
+    
     # 使用 get_openai_callback 追踪 token
     with get_openai_callback() as cb:
-        response = llm.invoke(messages)
+        response = llm_with_tools.invoke(messages)
+    
+    # 处理工具调用
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        for tool_call in response.tool_calls:
+            tool_name = tool_call.get('name', '')
+            tool_args = tool_call.get('args', {})
+            
+            # 执行邮件工具
+            if tool_name == 'send_email_tool':
+                from src.tools.email_tool import send_email_tool
+                tool_result = send_email_tool.invoke(tool_args)
+                print(f"[Tool] {tool_name}: {tool_result}")
     
     # DEBUG: 打印回调捕获的信息
     print(f"[DEBUG Token] prompt={cb.prompt_tokens}, completion={cb.completion_tokens}, total={cb.total_tokens}, cost={cb.total_cost}")
