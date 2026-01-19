@@ -144,12 +144,13 @@ async function sendChatMessage(message) {
     setStatus('thinking...');
 
     try {
-        const response = await fetch(`${API_BASE}/api/chat/multi`, {
+        const response = await fetch(`${API_BASE}/api/chat/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message,
-                thread_id: currentSession.thread_id
+                session_id: currentSession.session_id || null,
+                agent_ids: currentSession.agents
             })
         });
 
@@ -157,8 +158,11 @@ async function sendChatMessage(message) {
 
         const data = await response.json();
 
+        // 更新 session_id
+        currentSession.session_id = data.session_id;
+
         for (const r of data.responses) {
-            addMessage(r.agent_name, r.response, 'assistant');
+            addMessage(r.agent_name || r.agent_id, r.content, 'assistant');
         }
 
         setStatus('online');
