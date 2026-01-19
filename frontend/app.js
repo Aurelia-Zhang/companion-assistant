@@ -77,9 +77,8 @@ function showMainMenu() {
 
 async function showSessionList() {
     try {
-        const response = await fetch(`${API_BASE}/api/sessions`);
+        const response = await fetch(`${API_BASE}/api/chat/sessions`);
         if (!response.ok) {
-            // API not exist, show placeholder
             addSystemMessage('No sessions yet. Use @agent to start.');
             return;
         }
@@ -174,7 +173,7 @@ async function sendChatMessage(message) {
 
 async function sendCommand(command) {
     try {
-        const response = await fetch(`${API_BASE}/api/status/record`, {
+        const response = await fetch(`${API_BASE}/api/command/execute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command })
@@ -182,7 +181,7 @@ async function sendCommand(command) {
         const data = await response.json();
         addSystemMessage(data.message);
     } catch (error) {
-        addSystemMessage('Command failed');
+        addSystemMessage('Command failed: ' + error.message);
     }
 }
 
@@ -206,7 +205,6 @@ function handleInput() {
         } else if (input.startsWith('/join ')) {
             const num = parseInt(input.substring(6)) - 1;
             if (sessionList[num]) {
-                // Would need API to load session
                 addSystemMessage('Joining session... (not implemented yet)');
             } else {
                 addSystemMessage('Invalid session number');
@@ -220,9 +218,10 @@ function handleInput() {
                 addSystemMessage('Usage: @agent_name');
             }
         } else if (input.startsWith('/')) {
-            addSystemMessage('Unknown command. Use /list, /agents, /push, or @agent');
+            // Send all other / commands to backend
+            sendCommand(input);
         } else {
-            addSystemMessage('Use @agent to start chat');
+            addSystemMessage('Use @agent to start chat, or /help for commands');
         }
         return;
     }

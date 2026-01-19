@@ -1,0 +1,521 @@
+' ============================================================
+' 课程设计报告 - PlantUML 图表代码
+' ============================================================
+' 使用方法: 复制对应的代码块到 PlantUML 编辑器生成图片
+' 在线编辑器: https://www.plantuml.com/plantuml/uml/
+' ============================================================
+
+
+' ============================================================
+' 图1: 系统整体架构图 (Section 3.1)
+' ============================================================
+@startuml system_architecture
+
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 11
+
+title 系统整体架构图
+
+package "用户层 (User Layer)" as UserLayer #E3F2FD {
+    [PWA Web App\n(iOS/Android)] as PWA
+    [命令行界面\n(CLI)] as CLI
+    [API调用\n(REST)] as API
+}
+
+package "API网关层 (API Gateway)" as APILayer #E8F5E9 {
+    [Chat Routes\n/api/chat] as ChatRoute
+    [Command Routes\n/api/command] as CmdRoute
+    [Push Routes\n/api/push] as PushRoute
+    note bottom of APILayer : FastAPI + Uvicorn
+}
+
+package "业务逻辑层 (Business Logic)" as BizLayer #FFF3E0 {
+    [多Agent调度\nmulti_agent.py] as MultiAgent
+    [聊天管理器\nchat_manager] as ChatMgr
+    [主动消息服务\nproactive_svc] as ProactiveSvc
+    [记忆提取器\nmemory_extractor] as MemExtract
+    [日记生成器\ndiary_generator] as DiaryGen
+    [邮件工具\nemail_tool] as EmailTool
+}
+
+package "核心框架层 (Core Framework)" as CoreLayer #FCE4EC {
+    [LangChain\n消息处理] as LangChain
+    [LangGraph\n状态管理] as LangGraph
+    [OpenAI API\nLLM调用] as OpenAI
+}
+
+package "数据存储层 (Data Storage)" as DataLayer #F3E5F5 {
+    database "Supabase\nPostgreSQL" as Supabase
+    database "pgvector\n向量存储" as PGVector
+    database "SQLite\n本地回退" as SQLite
+}
+
+UserLayer -down-> APILayer
+APILayer -down-> BizLayer
+BizLayer -down-> CoreLayer
+CoreLayer -down-> DataLayer
+
+@enduml
+
+
+' ============================================================
+' 图2: 用例图 (Section 2.3)
+' ============================================================
+@startuml use_case
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam actorStyle awesome
+
+left to right direction
+
+actor "用户" as User
+actor "系统调度器" as Scheduler
+
+rectangle "智能陪伴交互系统" {
+    
+    package "用户交互功能" {
+        usecase "对话交互\n@小伴 聊天" as UC1
+        usecase "快捷状态记录\n/wake /meal" as UC2
+        usecase "查看历史\n/list /status" as UC3
+        usecase "多Agent群聊\n@小伴 @学霸君" as UC4
+    }
+    
+    package "系统自动功能" {
+        usecase "记忆自动提取" as UC5
+        usecase "状态入库" as UC6
+        usecase "规则检查" as UC7
+        usecase "消息生成" as UC8
+        usecase "推送通知" as UC9
+    }
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+
+UC1 ..> UC5 : <<include>>
+UC2 ..> UC6 : <<include>>
+
+Scheduler --> UC7
+UC7 ..> UC8 : <<include>>
+UC8 ..> UC9 : <<include>>
+
+@enduml
+
+
+' ============================================================
+' 图3: ER图 - 数据库设计 (Section 6.1)
+' ============================================================
+@startuml er_diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam linetype ortho
+
+entity "chat_sessions" as sessions {
+    * id : BIGSERIAL <<PK>>
+    --
+    session_type : VARCHAR(20)
+    participants : TEXT[]
+    created_at : TIMESTAMP
+}
+
+entity "chat_messages" as messages {
+    * id : BIGSERIAL <<PK>>
+    --
+    * session_id : UUID <<FK>>
+    role : VARCHAR(20)
+    content : TEXT
+    agent_id : VARCHAR(50)
+    created_at : TIMESTAMP
+}
+
+entity "memories" as memories {
+    * id : BIGSERIAL <<PK>>
+    --
+    content : TEXT
+    memory_type : VARCHAR(20)
+    importance : FLOAT
+    embedding : VECTOR(1536)
+    emotion_tags : TEXT[]
+    entity_refs : TEXT[]
+    source_session : UUID
+    access_count : INT
+    created_at : TIMESTAMP
+    last_accessed_at : TIMESTAMP
+}
+
+entity "user_statuses" as statuses {
+    * id : BIGSERIAL <<PK>>
+    --
+    status_type : VARCHAR(30)
+    detail : TEXT
+    recorded_at : TIMESTAMP
+}
+
+entity "token_usage" as tokens {
+    * id : BIGSERIAL <<PK>>
+    --
+    model : VARCHAR(50)
+    prompt_tokens : INT
+    completion_tokens : INT
+    cost_usd : DECIMAL
+    created_at : TIMESTAMP
+}
+
+entity "diaries" as diaries {
+    * id : BIGSERIAL <<PK>>
+    --
+    date : DATE
+    content : TEXT
+    mood_summary : TEXT
+    created_at : TIMESTAMP
+}
+
+sessions ||--o{ messages : contains
+
+@enduml
+
+
+' ============================================================
+' 图4: 记忆提取流程图 (Section 4.2.2)
+' ============================================================
+@startuml memory_extraction_flow
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam ActivityBackgroundColor #E3F2FD
+skinparam ActivityBorderColor #1565C0
+
+title 记忆提取流程图
+
+start
+
+:用户消息 + AI回复;
+
+:构建对话内容;
+
+:调用记忆提取LLM\n(gpt-4o-mini);
+
+:解析JSON响应;
+
+if (是否有记忆?) then (是)
+    :遍历记忆列表;
+    
+    while (还有未处理记忆?) is (是)
+        if (importance > 0.3?) then (是)
+            :生成向量嵌入\n(text-embedding-3-small);
+            :存储到memories表\n(pgvector);
+        else (否)
+            :跳过低重要性记忆;
+        endif
+    endwhile (否)
+    
+    :返回存储的记忆数量;
+else (否)
+    :返回空列表;
+endif
+
+stop
+
+@enduml
+
+
+' ============================================================
+' 图5: 主动消息调度流程 (Section 4.3.2)
+' ============================================================
+@startuml proactive_scheduling_flow
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam ActivityBackgroundColor #FFF3E0
+skinparam ActivityBorderColor #EF6C00
+
+title 主动消息调度流程图
+
+start
+
+:APScheduler定时触发\n(每5分钟);
+
+:获取所有启用的规则;
+
+while (遍历规则) is (还有规则)
+    
+    if (规则是否启用?) then (启用)
+        if (是否在冷却期?) then (是)
+            :跳过此规则;
+        else (否)
+            if (条件是否满足?) then (满足)
+                :计算触发概率;
+                if (概率通过?) then (通过)
+                    :获取用户今日状态;
+                    :调用LLM生成消息;
+                    :记录触发时间;
+                    :发送Web Push通知;
+                    stop
+                else (未通过)
+                    :跳过此规则;
+                endif
+            else (不满足)
+                :跳过此规则;
+            endif
+        endif
+    else (禁用)
+        :跳过此规则;
+    endif
+    
+endwhile (无更多规则)
+
+:本次无触发;
+
+stop
+
+@enduml
+
+
+' ============================================================
+' 图6: 部署架构图 (Section 8.2)
+' ============================================================
+@startuml deployment_architecture
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam nodeStyle rectangle
+
+title 部署架构图
+
+node "开发者" as Dev {
+    artifact "源代码" as Code
+}
+
+cloud "GitHub" as GitHub {
+    artifact "Git Repository" as Repo
+}
+
+cloud "Render" as Render {
+    node "Web Server" as WebServer {
+        component "FastAPI\nApplication" as FastAPI
+        component "APScheduler" as Scheduler
+    }
+}
+
+cloud "Supabase" as SupabaseCloud {
+    database "PostgreSQL\n+ pgvector" as DB
+}
+
+cloud "OpenAI" as OpenAICloud {
+    component "GPT-4o-mini\nAPI" as GPT
+}
+
+cloud "Anthropic" as AnthropicCloud {
+    component "Claude\nAPI" as Claude
+}
+
+actor "用户" as User
+node "移动设备" as Mobile {
+    component "PWA App" as PWA
+}
+
+Dev --> GitHub : git push
+GitHub --> Render : 自动部署
+WebServer --> DB : 数据读写
+WebServer --> GPT : LLM调用
+WebServer --> Claude : LLM调用
+User --> Mobile
+Mobile --> WebServer : HTTPS请求
+WebServer --> Mobile : Web Push
+
+@enduml
+
+
+' ============================================================
+' 图7: 多Agent调度流程 (补充)
+' ============================================================
+@startuml multi_agent_flow
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam ActivityBackgroundColor #E8F5E9
+skinparam ActivityBorderColor #2E7D32
+
+title 多Agent调度流程图
+
+start
+
+:接收用户消息;
+
+:解析@提及;
+
+if (有明确@某Agent?) then (有)
+    :选择被@的Agent;
+else (无)
+    :检查触发关键词;
+    if (匹配到关键词?) then (匹配)
+        :选择对应Agent;
+    else (无匹配)
+        :使用默认Agent\n(小伴);
+    endif
+endif
+
+:获取记忆上下文;
+
+:构建System Prompt\n(人设 + 用户信息 + 记忆);
+
+:调用LLM生成回复;
+
+:触发记忆提取\n(异步);
+
+:检查随机插嘴;
+
+if (其他Agent要插嘴?) then (是)
+    :生成额外Agent回复;
+endif
+
+:返回所有回复;
+
+stop
+
+@enduml
+
+
+' ============================================================
+' 图8: 组件图 - 模块依赖关系 (补充)
+' ============================================================
+@startuml component_diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam componentStyle uml2
+
+title 系统组件依赖关系图
+
+package "API Layer" {
+    [chat.py] as ChatAPI
+    [command.py] as CmdAPI
+    [push.py] as PushAPI
+}
+
+package "Agents" {
+    [multi_agent.py] as MultiAgent
+    [chat_manager.py] as ChatMgr
+    [companion_agent.py] as CompAgent
+    [token_callback.py] as TokenCB
+}
+
+package "Memory" {
+    [supabase_memory.py] as SupaMem
+    [memory_extractor.py] as MemExtract
+    [chat_store.py] as ChatStore
+    [status_store.py] as StatusStore
+}
+
+package "Scheduler" {
+    [proactive_service.py] as ProSvc
+    [push_service.py] as PushSvc
+}
+
+package "Models" {
+    [agent_persona.py] as Persona
+    [proactive_rule.py] as Rules
+    [status.py] as Status
+}
+
+package "Database" {
+    [db_client.py] as DBClient
+}
+
+package "Utils" {
+    [llm_factory.py] as LLMFactory
+}
+
+' API dependencies
+ChatAPI --> MultiAgent
+ChatAPI --> MemExtract
+CmdAPI --> StatusStore
+PushAPI --> PushSvc
+
+' Agent dependencies
+MultiAgent --> Persona
+MultiAgent --> LLMFactory
+MultiAgent --> SupaMem
+ChatMgr --> ChatStore
+CompAgent --> LLMFactory
+
+' Memory dependencies
+SupaMem --> DBClient
+MemExtract --> SupaMem
+MemExtract --> LLMFactory
+ChatStore --> DBClient
+StatusStore --> DBClient
+
+' Scheduler dependencies
+ProSvc --> Rules
+ProSvc --> StatusStore
+ProSvc --> LLMFactory
+ProSvc --> PushSvc
+
+@enduml
+
+
+' ============================================================
+' 图9: 时序图 - 完整对话流程 (补充)
+' ============================================================
+@startuml sequence_chat
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Microsoft YaHei
+skinparam sequenceMessageAlign center
+
+title 完整对话时序图
+
+actor 用户 as User
+participant "PWA\n前端" as PWA
+participant "FastAPI\n后端" as API
+participant "MultiAgent\n调度器" as Agent
+participant "LLM\n(GPT-4)" as LLM
+participant "Memory\n记忆系统" as Memory
+database "Supabase" as DB
+
+User -> PWA : 输入消息\n"@小伴 我明天有考试"
+activate PWA
+
+PWA -> API : POST /api/chat
+activate API
+
+API -> Agent : multi_agent_chat(message)
+activate Agent
+
+Agent -> Memory : get_memory_context(message)
+activate Memory
+Memory -> DB : 向量相似度搜索
+DB --> Memory : 相关记忆
+Memory --> Agent : 记忆上下文
+deactivate Memory
+
+Agent -> LLM : 生成回复\n(System Prompt + 记忆 + 消息)
+activate LLM
+LLM --> Agent : AI回复
+deactivate LLM
+
+Agent -> Memory : extract_memories(user_msg, ai_response)
+activate Memory
+Memory -> LLM : 提取记忆
+LLM --> Memory : JSON记忆列表
+Memory -> DB : 存储新记忆
+deactivate Memory
+
+Agent --> API : 回复列表
+deactivate Agent
+
+API -> DB : 保存聊天记录
+API --> PWA : JSON响应
+deactivate API
+
+PWA --> User : 显示AI回复
+deactivate PWA
+
+@enduml

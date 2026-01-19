@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-from src.api.routes import chat_router, status_router
+from src.api.routes import chat_router, status_router, command_router
 from src.api.routes.push import router as push_router
 
 
@@ -17,7 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AI 陪伴助手 API",
         description="提供对话、状态记录等功能的 API",
-        version="1.2.0"
+        version="1.2.5"
     )
     
     # 配置 CORS（允许前端跨域访问）
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(status_router)
     app.include_router(push_router)
+    app.include_router(command_router)
     
     # 静态文件（前端）- 直接使用 frontend 目录
     frontend_path = os.path.join(os.path.dirname(__file__), "../../frontend")
