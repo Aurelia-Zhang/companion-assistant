@@ -13,7 +13,7 @@
 - [x] v1.2.2: Supabase 云数据库迁移
 - [x] v1.2.3: 邮件工具集成 (AI 可发邮件)
 - [x] v1.2.4: RAG 长期记忆系统 (Supabase pgvector)
-- [x] v1.2.5: 手机推送通知 (Web Push)
+- [x] v1.2.5: 手机推送通知 (Web Push) + Render 部署
 
 ---
 
@@ -21,93 +21,96 @@
 
 ```
 companion-assistant/
-├── main.py          # 旧版 CLI (v1.0)
-├── main_v2.py       # 新版 CLI (v1.2) ← 使用这个
-├── server.py        # API 服务器 + 前端
+├── main_v2.py       # CLI 入口 (v1.2)
+├── server.py        # API 服务器
 ├── src/
 │   ├── agents/
-│   │   ├── companion_agent.py  # 单Agent对话 (LangGraph)
-│   │   ├── multi_agent.py      # 多Agent群聊
-│   │   ├── chat_manager.py     # v1.2 会话管理器
-│   │   └── diary_generator.py  # 日记生成
-│   ├── models/
-│   │   ├── agent_persona.py    # Agent人设 (含api_base_url)
-│   │   ├── chat_session.py     # 聊天会话模型
-│   │   └── token_usage.py      # Token使用量
+│   │   ├── multi_agent.py      # 多Agent聊天 (主要)
+│   │   ├── chat_manager.py     # 会话管理器
+│   │   └── companion_agent.py  # 单Agent (LangGraph)
+│   ├── database/
+│   │   └── db_client.py        # 数据库抽象层 (Supabase/SQLite)
 │   ├── memory/
-│   │   ├── status_store.py     # 用户状态存储
-│   │   ├── chat_store.py       # 聊天记录存储
-│   │   ├── diary_store.py      # 日记存储
-│   │   ├── token_store.py      # Token统计存储
-│   │   └── rag_memory.py       # RAG向量记忆 (ChromaDB)
+│   │   ├── supabase_memory.py  # 向量记忆 (pgvector)
+│   │   ├── memory_extractor.py # 自动记忆提取
+│   │   ├── chat_store.py       # 聊天存储
+│   │   ├── status_store.py     # 状态存储
+│   │   └── rag_memory.py       # 本地向量 (ChromaDB, 备用)
+│   ├── utils/
+│   │   └── llm_factory.py      # LLM工厂 (多provider)
 │   ├── scheduler/
 │   │   ├── proactive_service.py # 主动消息
-│   │   └── push_service.py      # Web Push推送
-│   ├── tools/
-│   │   └── email_tool.py        # 邮件MCP
-│   └── commands/
-│       └── command_parser.py    # /命令解析
+│   │   └── push_service.py      # Web Push
+│   └── tools/
+│       └── email_tool.py        # 邮件发送
 ├── frontend/         # PWA前端
-└── data/             # SQLite数据库
+└── scripts/          # 辅助脚本
 ```
 
 ---
 
-## v1.2 新功能
+## 核心功能
 
-### 1. 聊天系统重构
-- `main_v2.py`: 新CLI入口
+### 1. 多 Agent 聊天
 - 私聊: `@小伴`
 - 群聊: `@小伴 @学霸君`
-- 命令: `/list`, `/join <序号>`, `/export`
+- Agent 可使用不同模型和 API
 
-### 2. Agent配置增强
-- `agent_persona.py` 添加:
-  - `model`: 模型名称
-  - `api_base_url`: 自定义API地址
+### 2. Per-Agent API 配置
+```python
+# agent_persona.py
+AgentPersona(
+    model="claude-3-haiku",
+    api_base_url="https://api.anthropic.com/v1",
+    api_key_env="ANTHROPIC_API_KEY"
+)
+```
 
-### 3. RAG长期记忆
-- ChromaDB向量存储
-- `/import <文件>` 导入
-- `/memory search <关键词>` 搜索
-- 对话时自动检索相关记忆
+### 3. 云数据库 (Supabase)
+- 所有数据存储在 Supabase
+- SQLite 作为本地开发回退
+- 配置: `SUPABASE_URL`, `SUPABASE_KEY`
 
-### 4. 推送通知
-- iOS Web Push (需PWA添加到主屏幕)
-- 配置: `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`
+### 4. 自动记忆系统
+- **自动提取**: 对话后 LLM 提取值得记忆的信息
+- **四类记忆**: 语义/情景/情感/预测
+- **向量检索**: Supabase pgvector
+- **上下文注入**: 对话时自动检索相关记忆
 
-### 5. Token统计
-- `/tokens` 今日统计
-- `/tokens month` 月度统计
-- 自动记录每次API调用
+### 5. 邮件工具
+- AI 可主动发送邮件
+- QQ邮箱 SMTP
+- 配置: `EMAIL_SENDER`, `EMAIL_PASSWORD`, `EMAIL_RECEIVER`
 
-### 6. 日记功能
-- `/diary` 生成/查看今日日记
-- `/diary 2026-01-18` 查看指定日期
-
----
-
-## 数据存储
-
-**SQLite**: `data/conversations.db`
-
-| 表 | 用途 |
-|----|------|
-| chat_session | 聊天会话 |
-| chat_message | 聊天消息 |
-| user_status | 用户状态 |
-| token_usage | Token统计 |
-| diary | 日记 |
-
-**ChromaDB**: `data/chroma_db/` (RAG向量)
+### 6. 推送通知
+- Web Push (iOS 16.4+ PWA)
+- 配置: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+- 前端命令: `/push` 订阅, `/testpush` 测试
 
 ---
 
-## 待完成
+## 部署
 
-1. **Supabase迁移**: 替换SQLite为云数据库
-2. **前端会话列表**: `/list` API尚未实现
-3. **AI自动记忆**: AI主动写入记忆库
+**推荐: Render** (免费, 自动HTTPS)
+
+```bash
+# 本地开发
+uv run python server.py
+
+# 部署到 Render
+git push  # 自动部署
+```
+
+**环境变量**:
+| 变量 | 必需 | 说明 |
+|------|------|------|
+| OPENAI_API_KEY | ✅ | OpenAI API |
+| SUPABASE_URL | ✅ | Supabase 项目 URL |
+| SUPABASE_KEY | ✅ | Supabase anon key |
+| EMAIL_SENDER | ❌ | QQ邮箱 |
+| EMAIL_PASSWORD | ❌ | 授权码 |
+| VAPID_PUBLIC_KEY | ❌ | Web Push 公钥 |
+| VAPID_PRIVATE_KEY | ❌ | Web Push 私钥 |
 
 ---
 
@@ -116,6 +119,6 @@ companion-assistant/
 | 日期 | 决策 | 原因 |
 |------|------|------|
 | 2026-01-16 | LangGraph | 强状态管理 |
-| 2026-01-16 | SQLite | 轻量无服务 |
-| 2026-01-18 | ChromaDB | 本地向量存储 |
-| 2026-01-18 | Web Push | iOS原生支持 |
+| 2026-01-18 | Supabase | 云数据库 + pgvector |
+| 2026-01-19 | Render | 免费部署 + HTTPS |
+| 2026-01-19 | 自动记忆 | LLM 提取 + 向量存储 |
