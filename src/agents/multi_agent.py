@@ -19,7 +19,7 @@ import re
 from typing import Optional
 from datetime import datetime
 
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 
 from src.models.agent_persona import (
     AgentPersona,
@@ -128,12 +128,17 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
     # 构建 System Prompt (包含 RAG 记忆)
     user_context = get_dynamic_user_context()
     
-    # 获取 RAG 相关记忆
+    # 获取 RAG 相关记忆 (优先使用新的 Supabase 记忆系统)
     try:
-        from src.memory.rag_memory import get_memory_context
+        from src.memory.supabase_memory import get_memory_context
         memory_context = get_memory_context(message)
     except Exception:
-        memory_context = ""
+        # 回退到旧的 ChromaDB
+        try:
+            from src.memory.rag_memory import get_memory_context as get_old_memory
+            memory_context = get_old_memory(message)
+        except Exception:
+            memory_context = ""
     
     system_prompt = f"""
 {agent.personality}
@@ -167,16 +172,32 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
         response = llm_with_tools.invoke(messages)
     
     # 处理工具调用
+    tool_results = []
     if hasattr(response, 'tool_calls') and response.tool_calls:
         for tool_call in response.tool_calls:
             tool_name = tool_call.get('name', '')
             tool_args = tool_call.get('args', {})
+            tool_id = tool_call.get('id', '')
             
             # 执行邮件工具
             if tool_name == 'send_email_tool':
                 from src.tools.email_tool import send_email_tool
                 tool_result = send_email_tool.invoke(tool_args)
                 print(f"[Tool] {tool_name}: {tool_result}")
+                tool_results.append((tool_id, tool_name, tool_result))
+        
+        # 如果有工具调用，需要让 LLM 生成后续回复
+        if tool_results:
+            # 构建包含工具结果的消息
+            messages_with_tools = messages + [response]
+            for tool_id, tool_name, result in tool_results:
+                messages_with_tools.append(
+                    ToolMessage(content=result, tool_call_id=tool_id)
+                )
+            
+            # 再次调用 LLM 生成最终回复
+            final_response = llm_with_tools.invoke(messages_with_tools)
+            response = final_response
     
     # DEBUG: 打印回调捕获的信息
     print(f"[DEBUG Token] prompt={cb.prompt_tokens}, completion={cb.completion_tokens}, total={cb.total_tokens}, cost={cb.total_cost}")
@@ -184,7 +205,7 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
     # 保存 token 使用记录
     if cb.total_tokens > 0:
         usage = TokenUsage(
-            model="gpt-4o-mini",
+            model=agent.model,
             agent_id=agent.id,
             prompt_tokens=cb.prompt_tokens,
             completion_tokens=cb.completion_tokens,
@@ -193,7 +214,21 @@ def generate_response(agent: AgentPersona, message: str, context: str = "") -> s
         )
         save_usage(usage)
     
-    return response.content
+    # 异步提取记忆 (不阻塞主流程)
+    final_content = response.content or ""
+    try:
+        from src.memory.memory_extractor import process_conversation_for_memory
+        import threading
+        thread = threading.Thread(
+            target=process_conversation_for_memory,
+            args=(message, final_content, context)
+        )
+        thread.daemon = True
+        thread.start()
+    except Exception:
+        pass
+    
+    return final_content
 
 
 def multi_agent_chat(message: str) -> list[dict]:
