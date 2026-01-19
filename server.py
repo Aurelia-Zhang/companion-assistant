@@ -25,12 +25,18 @@ def main():
     # 启动后台调度器
     start_scheduler(check_interval_minutes=5)
     
+    # 获取端口 (Render 通过 PORT 环境变量设置)
+    port = int(os.getenv("PORT", 8000))
+    
+    # 生产环境禁用 reload
+    is_dev = os.getenv("DEV_MODE", "false").lower() == "true"
+    
     # 启动 FastAPI
     uvicorn.run(
         "src.api:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True  # 开发模式，代码修改自动重载
+        port=port,
+        reload=is_dev
     )
 
 

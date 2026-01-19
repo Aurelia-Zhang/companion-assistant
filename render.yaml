@@ -1,0 +1,12 @@
+# Render 部署配置
+# 详情: https://render.com/docs/yaml-spec
+
+services:
+  - type: web
+    name: companion-assistant
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.0"
