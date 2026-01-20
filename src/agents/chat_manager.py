@@ -22,7 +22,7 @@ from src.memory.chat_store import (
     create_session, get_session, list_sessions,
     add_message, get_session_messages, export_session
 )
-from src.agents.multi_agent import generate_response, check_random_join
+from src.agents.multi_agent import generate_response
 
 
 class ChatManager:
