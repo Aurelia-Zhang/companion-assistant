@@ -116,9 +116,13 @@ def parse_and_execute(user_input: str) -> CommandResult:
     if command_name == "import":
         return _handle_import_command(args)
     
-    # 特殊命令: 查看记忆库
+    # 特殊命令: 查看记忆库（导入的文件）
     if command_name == "memory":
         return _handle_memory_command(args)
+    
+    # 特殊命令: 查看 AI 提取的记忆
+    if command_name == "memories":
+        return _handle_memories_command(args)
     
     # 查找命令映射
     if command_name not in COMMAND_MAPPING:
@@ -335,6 +339,70 @@ def _handle_memory_command(args: str) -> CommandResult:
         lines.append(f"  - {doc}")
     
     return CommandResult(True, "\n".join(lines))
+
+
+def _handle_memories_command(args: str) -> CommandResult:
+    """处理 /memories 命令：查看 AI 从对话中提取的记忆。"""
+    from src.database import get_db_client, is_using_supabase
+    
+    if not is_using_supabase():
+        return CommandResult(False, "记忆系统需要 Supabase。请配置 SUPABASE_URL 和 SUPABASE_KEY")
+    
+    db = get_db_client()
+    
+    # 解析参数
+    limit = 10
+    memory_type = None
+    
+    if args:
+        parts = args.split()
+        for part in parts:
+            if part.isdigit():
+                limit = min(int(part), 50)  # 最多 50 条
+            elif part in ["episodic", "semantic", "emotional", "predictive"]:
+                memory_type = part
+    
+    try:
+        # 查询 memories 表
+        filters = {"memory_type": memory_type} if memory_type else None
+        rows = db.select(
+            table="memories",
+            order_by="created_at",
+            order_desc=True,
+            limit=limit,
+            filters=filters
+        )
+        
+        if not rows:
+            return CommandResult(True, "📭 暂无 AI 记忆\n\n记忆会在对话中自动提取保存")
+        
+        lines = [f"🧠 AI 记忆 (最近 {len(rows)} 条)", "-" * 40]
+        
+        type_emoji = {
+            "episodic": "📅",
+            "semantic": "📚", 
+            "emotional": "💭",
+            "predictive": "🔮"
+        }
+        
+        for row in rows:
+            mtype = row.get("memory_type", "unknown")
+            emoji = type_emoji.get(mtype, "📝")
+            content = row.get("content", "")[:100]
+            importance = row.get("importance", 0)
+            
+            lines.append(f"{emoji} [{mtype}] (重要性: {importance:.1f})")
+            lines.append(f"   {content}...")
+            lines.append("")
+        
+        lines.append("-" * 40)
+        lines.append("用法: /memories [数量] [类型]")
+        lines.append("类型: episodic, semantic, emotional, predictive")
+        
+        return CommandResult(True, "\n".join(lines))
+        
+    except Exception as e:
+        return CommandResult(False, f"查询失败: {e}")
 
 
 def _handle_help_command() -> CommandResult:

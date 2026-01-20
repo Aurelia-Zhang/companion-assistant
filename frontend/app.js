@@ -326,11 +326,44 @@ quickActionsEl.addEventListener('click', (e) => {
         const cmd = e.target.dataset.cmd;
         if (cmd === '/quit') {
             showMainMenu();
+        } else if (e.target.id === 'upload-btn') {
+            document.getElementById('file-input').click();
         } else {
             inputEl.value = cmd;
             handleInput();
         }
     }
+});
+
+// 文件上传处理
+document.getElementById('file-input')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    addSystemMessage(`📤 正在上传 ${file.name}...`);
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE}/api/upload/document`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            addSystemMessage(`✅ ${data.message}`);
+        } else {
+            addSystemMessage(`❌ 上传失败: ${data.detail || '未知错误'}`);
+        }
+    } catch (error) {
+        addSystemMessage(`❌ 上传出错: ${error.message}`);
+    }
+
+    // 清空 input 以便重复上传同一文件
+    e.target.value = '';
 });
 
 // ==================== Push Notifications ====================
