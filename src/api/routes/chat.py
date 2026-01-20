@@ -78,8 +78,24 @@ async def send_message(request: ChatRequest):
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
         elif request.agent_ids:
-            # 新建会话
-            session = manager.start_new_chat(request.agent_ids)
+            # 新建会话 - 需要将名字转换为 ID
+            resolved_ids = []
+            all_agents = get_all_agents()
+            for agent_ref in request.agent_ids:
+                # 尝试匹配 ID 或名字
+                matched = False
+                for agent in all_agents:
+                    if agent_ref.lower() in [agent.id.lower(), agent.name.lower()]:
+                        if agent.id not in resolved_ids:
+                            resolved_ids.append(agent.id)
+                        matched = True
+                        break
+                if not matched:
+                    # 如果没匹配到，直接使用（可能就是 ID）
+                    if agent_ref not in resolved_ids:
+                        resolved_ids.append(agent_ref)
+            
+            session = manager.start_new_chat(resolved_ids)
         elif manager.current_session:
             # 使用当前活跃会话
             session = manager.current_session

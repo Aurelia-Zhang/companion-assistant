@@ -72,10 +72,13 @@ def send_email(
         content_type = "html" if html else "plain"
         msg.attach(MIMEText(body, content_type, "utf-8"))
         
+        # 设置超时时间 (秒)
+        timeout = 10
+        
         # 根据配置选择 SSL 或 TLS
         if config["use_ssl"]:
             # QQ邮箱等使用 SSL (端口 465)
-            server = smtplib.SMTP_SSL(config["host"], config["port"])
+            server = smtplib.SMTP_SSL(config["host"], config["port"], timeout=timeout)
             try:
                 server.login(config["sender"], config["password"])
                 server.send_message(msg)
@@ -86,7 +89,7 @@ def send_email(
                     pass  # 忽略关闭连接时的错误
         else:
             # Gmail 等使用 TLS (端口 587)
-            with smtplib.SMTP(config["host"], config["port"]) as server:
+            with smtplib.SMTP(config["host"], config["port"], timeout=timeout) as server:
                 server.starttls()
                 server.login(config["sender"], config["password"])
                 server.send_message(msg)
@@ -95,6 +98,10 @@ def send_email(
         
     except smtplib.SMTPAuthenticationError:
         return {"success": False, "message": "邮箱认证失败，请检查邮箱地址和授权码"}
+    except TimeoutError:
+        return {"success": False, "message": "连接邮件服务器超时，请检查网络"}
+    except OSError as e:
+        return {"success": False, "message": f"网络错误: {str(e)}"}
     except Exception as e:
         return {"success": False, "message": f"发送失败: {str(e)}"}
 
