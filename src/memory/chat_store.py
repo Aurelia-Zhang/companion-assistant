@@ -142,12 +142,8 @@ class ChatStore:
         if isinstance(agent_ids, str):
             agent_ids = json.loads(agent_ids)
         
-        created_at = row.get("created_at")
-        updated_at = row.get("updated_at")
-        if isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        if isinstance(updated_at, str):
-            updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        created_at = self._parse_datetime(row.get("created_at"))
+        updated_at = self._parse_datetime(row.get("updated_at"))
         
         return ChatSession(
             id=row.get("id", ""),
@@ -158,11 +154,31 @@ class ChatStore:
             updated_at=updated_at
         )
     
+    def _parse_datetime(self, value) -> datetime:
+        """安全解析日期时间值。"""
+        if value is None:
+            return datetime.now()
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            # 处理各种 ISO 格式
+            try:
+                # 标准 ISO 格式 (可能带 Z 或 +00:00)
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                # 尝试更宽松的解析
+                try:
+                    from dateutil.parser import parse
+                    return parse(value)
+                except:
+                    pass
+                # 最后回退
+                return datetime.now()
+        return datetime.now()
+    
     def _row_to_message(self, row: dict) -> ChatMessage:
         """将数据库行转换为 ChatMessage 对象。"""
-        created_at = row.get("created_at")
-        if isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        created_at = self._parse_datetime(row.get("created_at"))
         
         return ChatMessage(
             id=row.get("id", ""),
