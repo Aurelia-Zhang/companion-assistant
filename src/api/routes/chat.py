@@ -71,12 +71,16 @@ async def send_message(request: ChatRequest):
     manager = get_chat_manager()
     
     try:
+        # DEBUG: 打印收到的请求
+        print(f"[API Chat] message={request.message[:30]}..., session_id={request.session_id}, agent_ids={request.agent_ids}")
+        
         # 1. 确定会话
         if request.session_id:
             # 续聊：加入已有会话
             session = manager.join_session(request.session_id)
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
+            print(f"[API Chat] 续聊 session: type={session.session_type}, agents={session.agent_ids}")
         elif request.agent_ids:
             # 新建会话 - 需要将名字转换为 ID
             resolved_ids = []
@@ -95,17 +99,22 @@ async def send_message(request: ChatRequest):
                     if agent_ref not in resolved_ids:
                         resolved_ids.append(agent_ref)
             
+            print(f"[API Chat] 新建会话 resolved_ids={resolved_ids}")
             session = manager.start_new_chat(resolved_ids)
+            print(f"[API Chat] 创建的 session: type={session.session_type}, agents={session.agent_ids}")
         elif manager.current_session:
             # 使用当前活跃会话
             session = manager.current_session
+            print(f"[API Chat] 用现有 session: type={session.session_type}, agents={session.agent_ids}")
         else:
             # 默认：与默认 Agent 私聊
             default_agent = get_default_agent()
             session = manager.start_new_chat([default_agent.id])
+            print(f"[API Chat] 默认 session: type={session.session_type}, agents={session.agent_ids}")
         
         # 2. 发送消息并获取回复
         responses = manager.send_message(request.message)
+        print(f"[API Chat] 收到 {len(responses)} 个回复")
         
         # 3. 提取生活信息（后台处理，不阻塞）
         extracted_count = 0

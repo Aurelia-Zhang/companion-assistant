@@ -248,12 +248,14 @@ function handleInput() {
                 addSystemMessage('Invalid session number. Use /list first.');
             }
         } else if (input.startsWith('@')) {
-            const mentions = input.match(/@(\w+)/g);
-            if (mentions) {
+            // 匹配 @后面的中英文名字（支持中文）
+            const mentions = input.match(/@([\w\u4e00-\u9fff]+)/g);
+            if (mentions && mentions.length > 0) {
                 const agents = mentions.map(m => m.substring(1));
+                console.log('Creating chat with agents:', agents);
                 startChat(agents);
             } else {
-                addSystemMessage('Usage: @agent_name');
+                addSystemMessage('Usage: @agent_name (supports Chinese names like @小伴 @学霸君)');
             }
         } else if (input.startsWith('/')) {
             // Send all other / commands to backend
