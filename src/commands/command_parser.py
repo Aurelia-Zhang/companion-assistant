@@ -28,8 +28,16 @@
     /status             - 查看今日状态
 """
 
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
+
+# 东八区时区
+CHINA_TZ = timezone(timedelta(hours=8))
+
+
+def now_china() -> datetime:
+    """获取中国时区的当前时间。"""
+    return datetime.now(CHINA_TZ)
 
 from src.models.status import (
     UserStatus, 
@@ -126,7 +134,7 @@ def parse_and_execute(user_input: str) -> CommandResult:
     status = UserStatus(
         status_type=status_type,
         detail=args if args else None,
-        recorded_at=datetime.now(),
+        recorded_at=now_china(),
         source="command"
     )
     
@@ -167,7 +175,7 @@ def _handle_subcommand(command_name: str, args: str) -> CommandResult:
     status = UserStatus(
         status_type=status_type,
         detail=detail,
-        recorded_at=datetime.now(),
+        recorded_at=now_china(),
         source="command"
     )
     
@@ -373,7 +381,7 @@ def _generate_confirmation(status_type: StatusType, detail: Optional[str]) -> st
     """生成状态记录的确认消息。"""
     emoji = _get_status_emoji(status_type)
     name = _get_status_name(status_type)
-    time_str = datetime.now().strftime("%H:%M")
+    time_str = now_china().strftime("%H:%M")
     
     base = f"{emoji} 已记录: {name} ({time_str})"
     if detail:
