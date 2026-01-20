@@ -107,7 +107,7 @@
 
 ### 2.3 用例图
 
-![用例图](uml图/用例图.png)
+![用例图](../uml图/用例图.png)
 
 ---
 
@@ -117,7 +117,7 @@
 
 本系统采用前后端分离的分层架构设计，整体架构如下:
 
-![系统整体架构图](uml图/系统整体架构图.png)
+![系统整体架构图](../uml图/系统整体架构图.png)
 
 ### 3.2 技术选型
 
@@ -217,7 +217,7 @@ class AgentPersona(BaseModel):
 
 当用户发送消息时，系统按以下逻辑选择回复的Agent:
 
-![多Agent调度流程图](uml图/多Agent调度流程图.png)
+![多Agent调度流程图](../uml图/多Agent调度流程图.png)
 
 核心调度函数位于 `multi_agent.py`:
 
@@ -253,7 +253,7 @@ def multi_agent_chat(message: str) -> list[dict]:
 
 #### 4.2.2 记忆提取流程
 
-![记忆提取流程图](uml图/记忆提取流程图.png)
+![记忆提取流程图](../uml图/记忆提取流程图.png)
 
 记忆提取使用专门的System Prompt指导LLM识别有价值的信息:
 
@@ -322,7 +322,7 @@ class ProactiveRule(BaseModel):
 
 #### 4.3.2 调度流程
 
-![主动消息调度流程图](uml图/主动消息调度流程图.png)
+![主动消息调度流程图](../uml图/主动消息调度流程图.png)
 
 ### 4.4 快捷状态记录
 
@@ -512,7 +512,7 @@ class TokenTrackingCallback(BaseCallbackHandler):
 
 ### 6.1 ER图
 
-![ER图](uml图/ER图.png)
+![ER图](../uml图/ER图.png)
 
 ### 6.2 核心表结构
 
@@ -630,7 +630,7 @@ def test_chat_flow():
 
 ### 8.2 部署架构
 
-![部署架构图](uml图/部署架构图.png)
+![部署架构图](../uml图/部署架构图.png)
 
 ### 8.3 部署配置
 
@@ -731,7 +731,7 @@ CMD ["python", "server.py"]
 - Memory模块只负责记忆管理
 - Scheduler模块只负责定时任务
 
-![系统组件依赖关系图](uml图/系统组件依赖关系图.png)
+![系统组件依赖关系图](../uml图/系统组件依赖关系图.png)
 
 便于独立开发、测试和维护。
 
@@ -814,9 +814,8 @@ CMD ["python", "server.py"]
 
 ## 附录
 
-### 附录A: 演示视频录制建议
+### 附录A: 演示视频录制
 
-为了充分展示项目功能，建议按以下脚本录制演示视频:
 
 #### 第一部分: 系统概览 (1-2分钟)
 
