@@ -119,7 +119,7 @@ function startChat(agents) {
     currentSession = {
         agents: agents,
         type: agents.length === 1 ? 'private' : 'group',
-        thread_id: `session_${Date.now()}`
+        session_id: null  // Will be set after first message
     };
 
     quickActionsEl.style.display = 'flex';
@@ -133,6 +133,44 @@ function startChat(agents) {
     }
 
     inputEl.placeholder = 'message...';
+}
+
+async function joinSession(sessionInfo) {
+    // Load session history from API
+    try {
+        const response = await fetch(`${API_BASE}/api/chat/sessions/${sessionInfo.id}/history`);
+        if (!response.ok) {
+            addSystemMessage('Failed to load session');
+            return;
+        }
+        const data = await response.json();
+
+        // Set current session
+        currentSession = {
+            agents: sessionInfo.agents,
+            type: sessionInfo.type,
+            session_id: sessionInfo.id,
+            title: sessionInfo.title
+        };
+
+        quickActionsEl.style.display = 'flex';
+        clearMessages();
+
+        addSystemMessage(`Joined: ${sessionInfo.title}\n/quit to exit, /rename <name> to rename`);
+
+        // Display history
+        for (const msg of data.messages || []) {
+            if (msg.role === 'user') {
+                addMessage('user', msg.content, 'user');
+            } else {
+                addMessage(msg.agent_id || 'assistant', msg.content, 'assistant');
+            }
+        }
+
+        inputEl.placeholder = 'message...';
+    } catch (error) {
+        addSystemMessage('Failed to join session: ' + error.message);
+    }
 }
 
 // ==================== Chat ====================
@@ -205,9 +243,9 @@ function handleInput() {
         } else if (input.startsWith('/join ')) {
             const num = parseInt(input.substring(6)) - 1;
             if (sessionList[num]) {
-                addSystemMessage('Joining session... (not implemented yet)');
+                joinSession(sessionList[num]);
             } else {
-                addSystemMessage('Invalid session number');
+                addSystemMessage('Invalid session number. Use /list first.');
             }
         } else if (input.startsWith('@')) {
             const mentions = input.match(/@(\w+)/g);
@@ -232,12 +270,46 @@ function handleInput() {
         return;
     }
 
+    if (input.startsWith('/rename ')) {
+        const newTitle = input.substring(8).trim();
+        if (!newTitle) {
+            addSystemMessage('Usage: /rename <new title>');
+            return;
+        }
+        if (currentSession && currentSession.session_id) {
+            renameSession(currentSession.session_id, newTitle);
+        } else {
+            addSystemMessage('Cannot rename: no session ID yet. Send a message first.');
+        }
+        return;
+    }
+
     if (input.startsWith('/')) {
         sendCommand(input);
         return;
     }
 
     sendChatMessage(input);
+}
+
+async function renameSession(sessionId, newTitle) {
+    try {
+        const response = await fetch(`${API_BASE}/api/chat/sessions/${sessionId}/rename`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newTitle })
+        });
+        if (response.ok) {
+            if (currentSession) {
+                currentSession.title = newTitle;
+            }
+            addSystemMessage(`✅ Renamed to: ${newTitle}`);
+        } else {
+            addSystemMessage('Failed to rename session');
+        }
+    } catch (error) {
+        addSystemMessage('Rename failed: ' + error.message);
+    }
 }
 
 // ==================== Event Listeners ====================

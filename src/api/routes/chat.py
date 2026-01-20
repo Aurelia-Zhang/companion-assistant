@@ -173,6 +173,26 @@ async def list_agents():
     ]
 
 
+class RenameRequest(BaseModel):
+    """重命名请求。"""
+    title: str
+
+
+@router.patch("/sessions/{session_id}/rename")
+async def rename_session(session_id: str, request: RenameRequest):
+    """重命名会话。"""
+    from src.database import get_db_client
+    
+    db = get_db_client()
+    db.update(
+        table="chat_session",
+        data={"title": request.title},
+        filters={"id": session_id}
+    )
+    
+    return {"status": "ok", "title": request.title}
+
+
 # ==================== 向后兼容的旧 API ====================
 # 这些 API 标记为废弃，但保留用于兼容
 
