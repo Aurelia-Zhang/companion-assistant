@@ -1,5 +1,5 @@
 // Service Worker - 支持离线缓存和推送通知
-const CACHE_NAME = 'xiaoban-v11';
+const CACHE_NAME = 'xiaoban-v12';
 const ASSETS = [
     '/',
     '/index.html',

@@ -140,13 +140,30 @@ class StatusStore:
     
     def _row_to_status(self, row: dict) -> UserStatus:
         """将数据库行转换为 UserStatus 对象。"""
+        from datetime import timezone, timedelta
+        CHINA_TZ = timezone(timedelta(hours=8))
+        
         recorded_at = row.get("recorded_at")
         if isinstance(recorded_at, str):
             # 处理不同格式的时间字符串
             try:
-                recorded_at = datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+                # 转换到东八区
+                if dt.tzinfo is not None:
+                    recorded_at = dt.astimezone(CHINA_TZ)
+                else:
+                    # 如果没有时区信息，假定是 UTC
+                    recorded_at = dt.replace(tzinfo=timezone.utc).astimezone(CHINA_TZ)
             except ValueError:
-                recorded_at = datetime.now()
+                recorded_at = datetime.now(CHINA_TZ)
+        elif isinstance(recorded_at, datetime):
+            # 如果已经是 datetime 对象
+            if recorded_at.tzinfo is not None:
+                recorded_at = recorded_at.astimezone(CHINA_TZ)
+            else:
+                recorded_at = recorded_at.replace(tzinfo=timezone.utc).astimezone(CHINA_TZ)
+        else:
+            recorded_at = datetime.now(CHINA_TZ)
         
         return UserStatus(
             id=row.get("id"),
